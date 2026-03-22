@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Job Application Helper</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      width: 320px;
+      max-width: 100%;
+      min-height: 200px;
+      margin: 0;
+      padding: 16px;
+      font-family: sans-serif;
+      font-size: 14px;
+      color: #1a1a1a;
+      background: #ffffff;
+      overflow-x: hidden;
+    }
+    header {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    #status {
+      color: #555;
+      font-size: 13px;
+    }
+    nav {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    nav button {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      text-align: left;
+      font-size: 13px;
+    }
+    nav button:hover {
+      background: #e8e8e8;
+    }
+
+    /* ── Auth view ─────────────────────────────────────────────────────── */
+    .tab-switcher {
+      display: flex;
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: #555;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab-btn.active {
+      color: #1a1a1a;
+      font-weight: 600;
+      border-bottom-color: #4a90e2;
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .auth-form input {
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .auth-form button[type="submit"] {
+      padding: 8px;
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .auth-form button[type="submit"]:hover {
+      background: #357abd;
+    }
+    .auth-message {
+      font-size: 12px;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+    .auth-message.error { color: #c0392b; }
+    .auth-message.success { color: #27ae60; }
+
+    /* ── Settings view ─────────────────────────────────────────────────── */
+    .settings-row {
+      margin-bottom: 12px;
+    }
+    .settings-row label {
+      display: block;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 3px;
+    }
+    .settings-row input[readonly] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #f9f9f9;
+      font-size: 13px;
+      color: #333;
+    }
+    .tier-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .tier-badge.free { background: #e8e8e8; color: #555; }
+    .tier-badge.premium { background: #fef3cd; color: #856404; }
+    .settings-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 12px 0 8px;
+    }
+    .settings-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .settings-form input {
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .btn-danger {
+      padding: 8px 12px;
+      background: #e74c3c;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      width: 100%;
+    }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-primary {
+      padding: 8px 12px;
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-primary:hover { background: #357abd; }
+    .btn-back {
+      margin-top: 8px;
+      font-size: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+    }
+    .settings-message {
+      font-size: 12px;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+    .settings-message.error { color: #c0392b; }
+    .settings-message.success { color: #27ae60; }
+
+    /* ── Dashboard view ────────────────────────────────────────────────── */
+    .dashboard-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+    }
+    .dashboard-row:last-child { border-bottom: none; }
+    .dashboard-row .job-title {
+      font-weight: 600;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dashboard-row .company {
+      color: #555;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dashboard-row .applied-date {
+      color: #888;
+      white-space: nowrap;
+    }
+    .dashboard-row select {
+      font-size: 11px;
+      padding: 2px 4px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    .dashboard-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .dashboard-pagination button {
+      padding: 4px 10px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+    }
+    .dashboard-pagination button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    #dashboard-status {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 8px;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <header>Auto Job Application Helper</header>
+
+  <!-- ── Auth view (shown when not logged in) ──────────────────────────── -->
+  <section id="view-auth" style="display:none;">
+    <div class="tab-switcher">
+      <button class="tab-btn active" id="tab-login">Login</button>
+      <button class="tab-btn" id="tab-register">Register</button>
+    </div>
+
+    <!-- Login form -->
+    <form class="auth-form" id="form-login">
+      <input type="email" id="login-email" placeholder="Email" required />
+      <input type="password" id="login-password" placeholder="Password" required />
+      <button type="submit">Login</button>
+    </form>
+
+    <!-- Register form -->
+    <form class="auth-form" id="form-register" style="display:none;">
+      <input type="email" id="register-email" placeholder="Email" required />
+      <input type="password" id="register-password" placeholder="Password" required />
+      <input type="password" id="register-confirm" placeholder="Confirm Password" required />
+      <button type="submit">Register</button>
+    </form>
+
+    <div class="auth-message" id="auth-message"></div>
+  </section>
+
+  <!-- ── Main view (shown when logged in) ──────────────────────────────── -->
+  <section id="view-main" style="display:none;">
+    <div id="status">Loading…</div>
+    <div id="usage-credits" style="font-size:12px;color:#555;margin-top:4px;"></div>
+
+    <nav>
+      <button id="btn-resume">Upload Resume</button>
+      <button id="btn-dashboard">Dashboard</button>
+      <button id="btn-settings">Account Settings</button>
+      <button id="btn-upgrade" style="display:none;">Upgrade to Premium</button>
+    </nav>
+  </section>
+
+  <!-- ── Resume upload view ─────────────────────────────────────────────── -->
+  <section id="view-resume" style="display:none;">
+    <h2 style="font-size:14px;margin:0 0 8px;">Upload Resume</h2>
+    <input type="file" id="resume-file-input" accept=".pdf,.docx" style="font-size:12px;width:100%;" />
+    <button id="btn-upload-resume" style="margin-top:8px;padding:6px 12px;width:100%;cursor:pointer;">Upload</button>
+    <div id="upload-status" style="margin-top:8px;font-size:12px;color:#555;"></div>
+    <button id="btn-back-from-resume" class="btn-back">← Back</button>
+  </section>
+
+  <!-- ── Account Settings view ─────────────────────────────────────────── -->
+  <section id="view-settings" style="display:none;">
+    <div class="settings-row">
+      <label>Email</label>
+      <input type="email" id="settings-email" readonly />
+    </div>
+    <div class="settings-row">
+      <label>Plan</label>
+      <span class="tier-badge free" id="settings-tier-badge">Free</span>
+    </div>
+
+    <button class="btn-danger" id="btn-logout">Logout</button>
+
+    <div class="settings-section-title">Change Password</div>
+    <div class="settings-form">
+      <input type="password" id="settings-current-password" placeholder="Current password" />
+      <input type="password" id="settings-new-password" placeholder="New password" />
+      <button class="btn-primary" id="btn-change-password">Confirm</button>
+    </div>
+    <div class="settings-message" id="settings-message"></div>
+
+    <button class="btn-back" id="btn-back-from-settings">← Back</button>
+  </section>
+
+  <!-- ── Dashboard view ───────────────────────────────────────────────── -->
+  <section id="view-dashboard" style="display:none;">
+    <h2 style="font-size:14px;margin:0 0 8px;">Dashboard</h2>
+    <div id="dashboard-status"></div>
+    <div id="dashboard-list"></div>
+    <div class="dashboard-pagination">
+      <button id="btn-dashboard-prev">Previous</button>
+      <span id="dashboard-page-info">Page 1</span>
+      <button id="btn-dashboard-next">Next</button>
+    </div>
+    <button class="btn-back" id="btn-back-from-dashboard">← Back</button>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
