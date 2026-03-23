@@ -172,7 +172,7 @@ async function handleGetAuthState(sendResponse) {
   const { accessToken, refreshToken, user } = await new Promise((resolve) => {
     chrome.storage.local.get(['accessToken', 'refreshToken', 'user'], resolve);
   });
-  sendResponse({ user: user ?? null, accessToken: accessToken ?? null, tier: user?.tier ?? 'free' });
+  sendResponse({ user: user ?? null, accessToken: accessToken ?? null, tier: user?.subscription_tier ?? user?.tier ?? 'free' });
 }
 
 /**
@@ -190,6 +190,7 @@ async function handleRefreshToken(sendResponse) {
 async function handleUploadResume({ fileData, filename, mimetype }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
+    console.log('[UPLOAD] accessToken present:', !!accessToken, accessToken ? accessToken.slice(0, 20) + '…' : 'MISSING');
 
     // Decode base64 data URL (e.g. "data:application/pdf;base64,<data>") to binary
     const base64 = fileData.split(',')[1];
@@ -305,9 +306,19 @@ async function handleRegister({ email, password }, sendResponse) {
       sendResponse({ error: data.error ?? 'Registration failed' });
       return;
     }
-    // Auto-login after registration
-    await storeTokens(data.data.accessToken, data.data.refreshToken, data.data.user);
-    sendResponse({ data: data.data, error: null });
+    // Register doesn't return tokens — auto-login to get them
+    const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const loginData = await loginRes.json();
+    if (!loginRes.ok) {
+      sendResponse({ error: loginData.error ?? 'Auto-login after register failed' });
+      return;
+    }
+    await storeTokens(loginData.data.accessToken, loginData.data.refreshToken, loginData.data.user);
+    sendResponse({ data: loginData.data, error: null });
   } catch (err) {
     sendResponse({ error: err.message });
   }
