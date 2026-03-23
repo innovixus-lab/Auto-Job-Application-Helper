@@ -69,13 +69,13 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     const app = insertResult.rows[0];
 
     // Increment usage_counters.applications_stored (upsert)
+    const currentMonth = new Date().toISOString().slice(0, 7);
     await pool.query(
-      `INSERT INTO usage_counters (user_id, applications_stored)
-       VALUES ($1, 1)
-       ON CONFLICT (user_id) DO UPDATE
-         SET applications_stored = usage_counters.applications_stored + 1,
-             updated_at = now()`,
-      [userId]
+      `INSERT INTO usage_counters (user_id, month, applications_stored)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (user_id, month) DO UPDATE
+         SET applications_stored = usage_counters.applications_stored + 1`,
+      [userId, currentMonth]
     );
 
     const extractedData = jd.extracted_data as Record<string, unknown>;

@@ -306,12 +306,38 @@ async function loadDashboard(page) {
 // ── Navigation ───────────────────────────────────────────────────────────────
 
 /**
+ * Fetches the user's existing resume from GET /resumes/me and shows it in the upload view.
+ */
+async function loadExistingResume() {
+  const statusEl = document.getElementById('upload-status');
+  statusEl.textContent = 'Checking for existing resume…';
+
+  const response = await new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+      (res) => resolve(res ?? { data: null, error: 'No response' })
+    );
+  });
+
+  if (response.data && response.data.parsedData) {
+    const pd = response.data.parsedData;
+    const name = pd.name ?? 'Unknown';
+    const count = pd.workExperience ? pd.workExperience.length : 0;
+    statusEl.textContent = `Current resume: ${name} (${count} work entries) — upload a new file to replace`;
+  } else {
+    statusEl.textContent = 'No resume uploaded yet.';
+  }
+}
+
+
+/**
  * Wires up navigation buttons.
  * @param {{ user: object|null, tier: string }} authState
  */
 function bindNavigation({ user, tier }) {
   document.getElementById('btn-resume').addEventListener('click', () => {
     showView('view-resume');
+    loadExistingResume();
   });
 
   document.getElementById('btn-dashboard').addEventListener('click', () => {

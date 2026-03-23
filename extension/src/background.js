@@ -158,7 +158,7 @@ async function handleApiRequest({ endpoint, method = 'GET', body }, sendResponse
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await response.json();
-    sendResponse({ data, error: null, status: response.status });
+    sendResponse({ data: data.data ?? data, error: data.error ?? null, status: response.status });
   } catch (err) {
     sendResponse({ data: null, error: err.message, status: 0 });
   }
