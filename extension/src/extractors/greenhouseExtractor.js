@@ -1,37 +1,37 @@
 import { JDExtractorBase } from '../jdExtractor.js';
 
-/**
- * Greenhouse-specific job description extractor.
- */
 export class GreenhouseExtractor extends JDExtractorBase {
   extract() {
-    const title = this.cleanText(
-      document.querySelector('h1.app-title, h1[class*="title"]')?.textContent ?? null
+    const title = this.queryText(
+      ['h1.app-title', 'h1[class*="title"]', 'h1'],
+      () => {
+        const h1 = this.getHeaders({ level: 1 })[0];
+        return h1 ? this.cleanText(h1.textContent) : this.cleanText(this.getPageTitle());
+      }
     );
 
-    const company = this.cleanText(
-      document.querySelector('.company-name, [class*="company"]')?.textContent ?? null
-    );
+    const company = this.queryText([
+      '.company-name',
+      '[class*="company"]',
+      'meta[property="og:site_name"]',
+    ]) || (() => {
+      const meta = document.querySelector('meta[property="og:site_name"]');
+      return meta ? this.cleanText(meta.getAttribute('content')) : null;
+    })();
 
-    const location = this.cleanText(
-      document.querySelector('.location, [class*="location"]')?.textContent ?? null
-    );
+    const location = this.queryText([
+      '.location',
+      '[class*="location"]',
+      '.job-location',
+    ]);
 
-    const employmentType = null;
+    const body = this.queryBody([
+      '#content',
+      '.job-description',
+      '#job-description',
+      '[class*="job-description"]',
+    ]);
 
-    const bodyEl = document.querySelector('#content, .job-description');
-    const body = bodyEl ? this.cleanText(bodyEl.innerHTML) : null;
-
-    const platform = 'greenhouse';
-    const sourceUrl = window.location.href;
-
-    if (!title) {
-      console.warn('[GreenhouseExtractor] Missing field:', 'title');
-    }
-    if (!body) {
-      console.warn('[GreenhouseExtractor] Missing field:', 'body');
-    }
-
-    return { platform, sourceUrl, title, company, location, employmentType, body };
+    return { platform: 'greenhouse', sourceUrl: window.location.href, title, company, location, employmentType: null, body };
   }
 }

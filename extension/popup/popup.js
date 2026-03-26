@@ -322,8 +322,13 @@ async function loadExistingResume() {
   if (response.data && response.data.parsedData) {
     const pd = response.data.parsedData;
     const name = pd.name ?? 'Unknown';
-    const count = pd.workExperience ? pd.workExperience.length : 0;
-    statusEl.textContent = `Current resume: ${name} (${count} work entries) — upload a new file to replace`;
+    const score = pd.resumeScore != null ? ` · Score: ${pd.resumeScore}/100` : '';
+    const level = pd.experienceLevel ? ` · Level: ${pd.experienceLevel}` : '';
+    const field = pd.predictedField && pd.predictedField !== 'NA' ? ` · Field: ${pd.predictedField}` : '';
+    statusEl.innerHTML =
+      `<strong>Current resume: ${name}</strong>${score}${level}${field}<br>` +
+      (pd.skills?.length ? `<em>Skills: ${pd.skills.slice(0, 8).join(', ')}${pd.skills.length > 8 ? '…' : ''}</em><br>` : '') +
+      `<small>Upload a new file to replace</small>`;
   } else {
     statusEl.textContent = 'No resume uploaded yet.';
   }
@@ -434,17 +439,22 @@ function bindNavigation({ user, tier }) {
       chrome.runtime.sendMessage(
         {
           type: 'UPLOAD_RESUME',
-          fileData: reader.result, // base64 data URL
+          fileData: reader.result,
           filename: file.name,
           mimetype: file.type,
         },
         (response) => {
           if (response?.data?.name) {
-            statusEl.textContent =
-              `✓ Uploaded: ${response.data.name} (${response.data.workExperienceCount} work entries)`;
+            const d = response.data;
+            const scoreBar = d.resumeScore != null ? ` · Score: ${d.resumeScore}/100` : '';
+            const level = d.experienceLevel ? ` · Level: ${d.experienceLevel}` : '';
+            const field = d.predictedField && d.predictedField !== 'NA' ? ` · Field: ${d.predictedField}` : '';
+            statusEl.innerHTML =
+              `<strong>✓ Uploaded: ${d.name}</strong>${scoreBar}${level}${field}<br>` +
+              (d.skills?.length ? `<em>Skills: ${d.skills.slice(0, 8).join(', ')}${d.skills.length > 8 ? '…' : ''}</em><br>` : '') +
+              (d.recommendedSkills?.length ? `<em>Recommended: ${d.recommendedSkills.slice(0, 5).join(', ')}…</em>` : '');
           } else {
-            statusEl.textContent =
-              `Error: ${response?.error ?? 'Upload failed'}`;
+            statusEl.textContent = `Error: ${response?.error ?? 'Upload failed'}`;
           }
         }
       );

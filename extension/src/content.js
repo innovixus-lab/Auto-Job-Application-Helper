@@ -7,7 +7,7 @@
 // ── Imports (resolved at build time; stubs until tasks 3–4 and 9 are done) ──
 
 import { JobDetector } from './jobDetector.js';
-import { JDExtractorBase } from './jdExtractor.js';
+import { JDExtractorBase, genericExtract } from './jdExtractor.js';
 import { LinkedInExtractor } from './extractors/linkedinExtractor.js';
 import { IndeedExtractor } from './extractors/indeedExtractor.js';
 import { GreenhouseExtractor } from './extractors/greenhouseExtractor.js';
@@ -31,13 +31,14 @@ let overlayDismissed = false;
  */
 function getExtractor(platform) {
   switch (platform) {
-    case 'linkedin':   return new LinkedInExtractor();
-    case 'indeed':     return new IndeedExtractor();
-    case 'greenhouse': return new GreenhouseExtractor();
-    case 'lever':      return new LeverExtractor();
-    case 'workday':    return new WorkdayExtractor();
-    case 'icims':      return new ICIMSExtractor();
-    default:           return new JDExtractorBase();
+    case 'linkedin':        return new LinkedInExtractor();
+    case 'indeed':          return new IndeedExtractor();
+    case 'greenhouse':      return new GreenhouseExtractor();
+    case 'lever':           return new LeverExtractor();
+    case 'workday':         return new WorkdayExtractor();
+    case 'icims':           return new ICIMSExtractor();
+    case 'generic':
+    default:                return { extract: () => genericExtract(platform) };
   }
 }
 
@@ -61,7 +62,7 @@ function getExtractor(platform) {
     if (jobDescription && (jobDescription.title !== null || jobDescription.body !== null)) {
       chrome.runtime.sendMessage({
         type: 'API_REQUEST',
-        endpoint: 'https://api.autojobhelper.com/job-descriptions',
+        endpoint: 'http://localhost:3000/job-descriptions',
         method: 'POST',
         body: jobDescription,
       }, (response) => {
@@ -226,7 +227,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     autofillOutput.textContent = '';
 
     chrome.runtime.sendMessage(
-      { type: 'API_REQUEST', endpoint: 'https://api.autojobhelper.com/resumes/me', method: 'GET' },
+      { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
       (response) => {
         autofillBtn.disabled = false;
         autofillBtn.textContent = 'Autofill';

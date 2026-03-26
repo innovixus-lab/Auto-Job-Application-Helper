@@ -5,6 +5,7 @@ import matchRouter from './routes/match';
 import generateRouter from './routes/generate';
 import applicationsRouter from './routes/applications';
 import stripeRouter from './routes/stripe';
+import jobDescriptionsRouter from './routes/jobDescriptions';
 import usageRouter from './routes/usage';
 import { requestLogger } from './middleware/requestLogger';
 import { rateLimiter } from './middleware/rateLimiter';
@@ -37,10 +38,8 @@ app.use('/match', matchRouter);
 app.use('/generate', generateRouter);
 
 app.use('/applications', applicationsRouter);
+app.use('/job-descriptions', jobDescriptionsRouter);
 app.use('/usage', usageRouter);
-
-// Placeholder route stubs — implemented in later tasks
-// app.use('/job-descriptions', jobDescriptionsRouter); // TODO (task 4.x): implement job descriptions CRUD
 
 // Envelope middleware — safety net to ensure all JSON responses have { data, error, status } shape
 app.use(envelope);

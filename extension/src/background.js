@@ -33,7 +33,7 @@ class JobDetector {
     // Greenhouse: boards.greenhouse.io + /*/jobs/* path pattern
     if (hostname === 'boards.greenhouse.io') {
       const parts = pathname.split('/').filter(Boolean);
-      if (parts.length >= 3 && parts[1] === 'jobs') {
+      if (parts.length >= 2) {
         return { detected: true, platform: 'greenhouse' };
       }
     }

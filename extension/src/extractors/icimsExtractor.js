@@ -1,39 +1,35 @@
 import { JDExtractorBase } from '../jdExtractor.js';
 
-/**
- * iCIMS-specific job description extractor.
- */
 export class ICIMSExtractor extends JDExtractorBase {
   extract() {
-    const title = this.cleanText(
-      document.querySelector('h1[class*="iCIMS_Header"], h1')?.textContent ?? null
+    const title = this.queryText(
+      ['h1[class*="iCIMS_Header"]', 'h1[class*="icims"]', 'h1'],
+      () => {
+        const h1 = this.getHeaders({ level: 1 })[0];
+        return h1 ? this.cleanText(h1.textContent) : this.cleanText(this.getPageTitle());
+      }
     );
 
-    const company = this.cleanText(
-      document.querySelector('.iCIMS_JobHeaderCompany')?.textContent ?? null
-    ) || null;
+    const company = this.queryText([
+      '.iCIMS_JobHeaderCompany',
+      '[class*="company"]',
+    ]) || (() => {
+      const meta = document.querySelector('meta[property="og:site_name"]');
+      return meta ? this.cleanText(meta.getAttribute('content')) : null;
+    })();
 
-    const location = this.cleanText(
-      document.querySelector(
-        '.iCIMS_JobHeaderLocation, [class*="location"]'
-      )?.textContent ?? null
-    );
+    const location = this.queryText([
+      '.iCIMS_JobHeaderLocation',
+      '[class*="location"]',
+      '[class*="iCIMS_Location"]',
+    ]);
 
-    const employmentType = null;
+    const body = this.queryBody([
+      '.iCIMS_JobContent',
+      '[class*="job-description"]',
+      '[class*="iCIMS_JobContent"]',
+    ]);
 
-    const bodyEl = document.querySelector('.iCIMS_JobContent, [class*="job-description"]');
-    const body = bodyEl ? this.cleanText(bodyEl.innerHTML) : null;
-
-    const platform = 'icims';
-    const sourceUrl = window.location.href;
-
-    if (!title) {
-      console.warn('[ICIMSExtractor] Missing field:', 'title');
-    }
-    if (!body) {
-      console.warn('[ICIMSExtractor] Missing field:', 'body');
-    }
-
-    return { platform, sourceUrl, title, company, location, employmentType, body };
+    return { platform: 'icims', sourceUrl: window.location.href, title, company, location, employmentType: null, body };
   }
 }

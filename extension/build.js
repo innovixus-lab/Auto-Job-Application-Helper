@@ -1,25 +1,48 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
+const esbuild = require('esbuild');
 
-const output = fs.createWriteStream(path.join(__dirname, 'extension-dist.zip'));
-const archive = archiver('zip', { zlib: { level: 9 } });
+async function build() {
+  // Bundle content.js (uses ES module imports) into a single IIFE file
+  await esbuild.build({
+    entryPoints: ['src/content.js'],
+    bundle: true,
+    outfile: 'dist/content.bundle.js',
+    format: 'iife',
+    target: 'chrome100',
+    platform: 'browser',
+  });
 
-output.on('close', () => {
-  console.log('Extension packaged: extension-dist.zip');
+  console.log('Bundled content.js → dist/content.bundle.js');
+
+  // Package extension
+  const output = fs.createWriteStream(path.join(__dirname, 'extension-dist.zip'));
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  output.on('close', () => {
+    console.log('Extension packaged: extension-dist.zip');
+  });
+
+  archive.on('error', (err) => { throw err; });
+  archive.pipe(output);
+
+  archive.directory('icons/', 'icons');
+  archive.directory('popup/', 'popup');
+
+  // Include all src files EXCEPT content.js (replaced by bundle)
+  archive.glob('src/**/*', {
+    ignore: ['src/__tests__/**', 'src/content.js'],
+  });
+
+  // Use the bundled content script
+  archive.file('dist/content.bundle.js', { name: 'src/content.js' });
+  archive.file('manifest.json', { name: 'manifest.json' });
+
+  await archive.finalize();
+}
+
+build().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });
-
-archive.on('error', (err) => {
-  throw err;
-});
-
-archive.pipe(output);
-
-archive.directory('icons/', 'icons');
-archive.directory('popup/', 'popup');
-archive.glob('src/**/*', {
-  ignore: ['src/__tests__/**']
-});
-archive.file('manifest.json', { name: 'manifest.json' });
-
-archive.finalize();

@@ -1,44 +1,42 @@
 import { JDExtractorBase } from '../jdExtractor.js';
 
-/**
- * LinkedIn-specific job description extractor.
- * Uses LinkedIn DOM selectors to extract job posting fields.
- */
 export class LinkedInExtractor extends JDExtractorBase {
   extract() {
-    const title = this.cleanText(
-      document.querySelector('h1.top-card-layout__title, h1[class*="job-title"], h1')?.textContent ?? null
+    // Title: specific selectors → first visible h1 → document.title
+    const title = this.queryText(
+      ['h1.top-card-layout__title', 'h1[class*="job-title"]', 'h1[class*="jobs-unified-top-card"]', 'h1'],
+      () => {
+        const h1 = this.getHeaders({ level: 1 })[0];
+        return h1 ? this.cleanText(h1.textContent) : this.cleanText(this.getPageTitle());
+      }
     );
 
-    const company = this.cleanText(
-      document.querySelector(
-        '.top-card-layout__card .topcard__org-name-link, [class*="company-name"]'
-      )?.textContent ?? null
-    );
+    const company = this.queryText([
+      '.top-card-layout__card .topcard__org-name-link',
+      '[class*="company-name"]',
+      '.jobs-unified-top-card__company-name a',
+      '[class*="topcard__org-name"]',
+    ]);
 
-    const location = this.cleanText(
-      document.querySelector(
-        '.top-card-layout__card .topcard__flavor--bullet, [class*="job-location"]'
-      )?.textContent ?? null
-    );
+    const location = this.queryText([
+      '.top-card-layout__card .topcard__flavor--bullet',
+      '[class*="job-location"]',
+      '.jobs-unified-top-card__bullet',
+    ]);
 
-    const employmentType = this.cleanText(
-      document.querySelector('[class*="employment-type"] span')?.textContent ?? null
-    ) || null;
+    const employmentType = this.queryText([
+      '[class*="employment-type"] span',
+      '.jobs-unified-top-card__job-insight span',
+    ]) || null;
 
-    const bodyEl = document.querySelector('.description__text, [class*="job-description"]');
-    const body = bodyEl ? this.cleanText(bodyEl.innerHTML) : null;
+    // Body: specific selectors → getMain() fallback
+    const body = this.queryBody([
+      '.description__text',
+      '[class*="job-description"]',
+      '.jobs-description-content__text',
+      '.jobs-box__html-content',
+    ]);
 
-    const sourceUrl = window.location.href;
-    const platform = 'linkedin';
-
-    if (!title) {
-      console.warn('[LinkedInExtractor] Missing field:', 'title');
-    }
-    if (!body) {
-      console.warn('[LinkedInExtractor] Missing field:', 'body');
-    }
-
-    return { platform, sourceUrl, title, company, location, employmentType, body };
+    return { platform: 'linkedin', sourceUrl: window.location.href, title, company, location, employmentType, body };
   }
 }

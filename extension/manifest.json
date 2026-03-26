@@ -11,29 +11,15 @@
     "identity"
   ],
   "host_permissions": [
-    "https://www.linkedin.com/jobs/view/*",
-    "https://www.indeed.com/viewjob*",
-    "https://boards.greenhouse.io/*",
-    "https://jobs.lever.co/*",
-    "https://*.myworkdayjobs.com/*",
-    "https://*.icims.com/jobs/*",
-    "https://api.autojobhelper.com/*",
-    "http://localhost:3000/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "src/background.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://www.linkedin.com/jobs/view/*",
-        "https://www.indeed.com/viewjob*",
-        "https://boards.greenhouse.io/*",
-        "https://jobs.lever.co/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.icims.com/jobs/*"
-      ],
-      "js": ["src/content.js"],
+      "matches": ["<all_urls>"],
+      "js": ["src/content.bundle.js"],
       "run_at": "document_idle"
     }
   ],

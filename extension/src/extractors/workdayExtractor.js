@@ -1,45 +1,44 @@
 import { JDExtractorBase } from '../jdExtractor.js';
 
-/**
- * Workday-specific job description extractor.
- */
 export class WorkdayExtractor extends JDExtractorBase {
   extract() {
-    const title = this.cleanText(
-      document.querySelector(
-        '[data-automation-id="jobPostingHeader"], h1[class*="title"]'
-      )?.textContent ?? null
+    const title = this.queryText(
+      [
+        '[data-automation-id="jobPostingHeader"]',
+        'h1[class*="title"]',
+        'h1',
+      ],
+      () => {
+        const h1 = this.getHeaders({ level: 1 })[0];
+        return h1 ? this.cleanText(h1.textContent) : this.cleanText(this.getPageTitle());
+      }
     );
 
-    const company = this.cleanText(
-      document.querySelector('[data-automation-id="company"]')?.textContent ?? null
-    ) || null;
+    const company = this.queryText([
+      '[data-automation-id="company"]',
+      '[class*="company"]',
+    ]) || (() => {
+      const meta = document.querySelector('meta[property="og:site_name"]');
+      return meta ? this.cleanText(meta.getAttribute('content')) : null;
+    })();
 
-    const location = this.cleanText(
-      document.querySelector(
-        '[data-automation-id="locations"], [class*="location"]'
-      )?.textContent ?? null
-    );
+    const location = this.queryText([
+      '[data-automation-id="locations"]',
+      '[class*="location"]',
+      '[data-automation-id="location"]',
+    ]);
 
-    const employmentType = this.cleanText(
-      document.querySelector('[data-automation-id="time"]')?.textContent ?? null
-    ) || null;
+    const employmentType = this.queryText([
+      '[data-automation-id="time"]',
+      '[data-automation-id="jobType"]',
+    ]) || null;
 
-    const bodyEl = document.querySelector(
-      '[data-automation-id="jobPostingDescription"], .job-description'
-    );
-    const body = bodyEl ? this.cleanText(bodyEl.innerHTML) : null;
+    const body = this.queryBody([
+      '[data-automation-id="jobPostingDescription"]',
+      '.job-description',
+      '[class*="job-description"]',
+    ]);
 
-    const platform = 'workday';
-    const sourceUrl = window.location.href;
-
-    if (!title) {
-      console.warn('[WorkdayExtractor] Missing field:', 'title');
-    }
-    if (!body) {
-      console.warn('[WorkdayExtractor] Missing field:', 'body');
-    }
-
-    return { platform, sourceUrl, title, company, location, employmentType, body };
+    return { platform: 'workday', sourceUrl: window.location.href, title, company, location, employmentType, body };
   }
 }

@@ -1,47 +1,43 @@
 import { JDExtractorBase } from '../jdExtractor.js';
 
-/**
- * Indeed-specific job description extractor.
- */
 export class IndeedExtractor extends JDExtractorBase {
   extract() {
-    const title = this.cleanText(
-      document.querySelector(
-        '[data-testid="jobsearch-JobInfoHeader-title"] span, h1[class*="jobsearch"]'
-      )?.textContent ?? null
+    const title = this.queryText(
+      [
+        '[data-testid="jobsearch-JobInfoHeader-title"] span',
+        'h1[class*="jobsearch"]',
+        'h1[class*="icl-u-xs-mb"]',
+        'h1',
+      ],
+      () => {
+        const h1 = this.getHeaders({ level: 1 })[0];
+        return h1 ? this.cleanText(h1.textContent) : this.cleanText(this.getPageTitle());
+      }
     );
 
-    const company = this.cleanText(
-      document.querySelector(
-        '[data-testid="inlineHeader-companyName"] a, [class*="companyName"]'
-      )?.textContent ?? null
-    );
+    const company = this.queryText([
+      '[data-testid="inlineHeader-companyName"] a',
+      '[class*="companyName"]',
+      '[data-testid="jobsearch-CompanyInfoContainer"] a',
+    ]);
 
-    const location = this.cleanText(
-      document.querySelector(
-        '[data-testid="job-location"], [class*="jobsearch-JobInfoHeader-subtitle"] div:last-child'
-      )?.textContent ?? null
-    );
+    const location = this.queryText([
+      '[data-testid="job-location"]',
+      '[class*="jobsearch-JobInfoHeader-subtitle"] div:last-child',
+      '[data-testid="jobsearch-JobInfoHeader-companyLocation"] div:last-child',
+    ]);
 
-    const employmentType = this.cleanText(
-      document.querySelector('[data-testid="job-type-label"]')?.textContent ?? null
-    ) || null;
+    const employmentType = this.queryText([
+      '[data-testid="job-type-label"]',
+      '[class*="jobMetaDataGroup"] span',
+    ]) || null;
 
-    const bodyEl = document.querySelector(
-      '#jobDescriptionText, [class*="jobsearch-jobDescriptionText"]'
-    );
-    const body = bodyEl ? this.cleanText(bodyEl.innerHTML) : null;
+    const body = this.queryBody([
+      '#jobDescriptionText',
+      '[class*="jobsearch-jobDescriptionText"]',
+      '[id*="jobDescription"]',
+    ]);
 
-    const platform = 'indeed';
-    const sourceUrl = window.location.href;
-
-    if (!title) {
-      console.warn('[IndeedExtractor] Missing field:', 'title');
-    }
-    if (!body) {
-      console.warn('[IndeedExtractor] Missing field:', 'body');
-    }
-
-    return { platform, sourceUrl, title, company, location, employmentType, body };
+    return { platform: 'indeed', sourceUrl: window.location.href, title, company, location, employmentType, body };
   }
 }
