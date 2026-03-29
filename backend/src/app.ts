@@ -20,8 +20,8 @@ app.use('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeRou
 app.use(requestLogger);
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Rate limiting — after body parsing
 app.use(rateLimiter);

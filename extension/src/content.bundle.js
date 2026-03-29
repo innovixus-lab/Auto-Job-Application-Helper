@@ -33,25 +33,16 @@
     return (typeof document !== "undefined" ? document.title : "") || "";
   }
   var JOB_TITLE_SIGNALS = [
-    "job",
-    "career",
-    "position",
-    "opening",
-    "vacancy",
-    "role",
-    "hiring",
-    "apply",
-    "application",
-    "engineer",
-    "developer",
-    "designer",
-    "manager",
-    "analyst",
-    "intern",
-    "full-time",
-    "part-time",
-    "remote",
-    "on-site"
+    "job opening",
+    "job posting",
+    "job vacancy",
+    "career opportunity",
+    "we are hiring",
+    "now hiring",
+    "apply now",
+    "apply for this job",
+    "job description",
+    "position available"
   ];
   var JOB_BODY_SIGNALS = [
     "responsibilities",
@@ -61,18 +52,11 @@
     "what we're looking for",
     "about the role",
     "about the job",
-    "job description",
-    "job summary",
-    "we are looking for",
-    "you will",
     "must have",
     "nice to have",
-    "benefits",
-    "compensation",
-    "salary",
-    "apply now",
+    "equal opportunity employer",
     "submit your application",
-    "equal opportunity"
+    "apply for this position"
   ];
   var JOB_HEADING_SIGNALS = [
     "about the role",
@@ -85,13 +69,10 @@
     "benefits",
     "who you are",
     "what we offer",
-    "about us",
-    "your responsibilities"
+    "your responsibilities",
+    "job requirements",
+    "job responsibilities"
   ];
-  function scoreSignals(text, signals) {
-    const lower = text.toLowerCase();
-    return signals.filter((s) => lower.includes(s)).length;
-  }
   var JobDetector = class {
     /**
      * URL-based detection (fast path).
@@ -149,34 +130,50 @@
         return { detected: false, platform: null, confidence: 0 };
       }
       let score = 0;
-      const title = getPageTitle();
-      score += scoreSignals(title, JOB_TITLE_SIGNALS) * 2;
-      const headers = getHeaders();
-      for (const h of headers) {
-        const text = h.textContent.trim().toLowerCase();
-        const weight = h.nodeName === "H1" ? 3 : h.nodeName === "H2" ? 2 : 1;
-        score += scoreSignals(text, JOB_TITLE_SIGNALS) * weight;
-        score += scoreSignals(text, JOB_HEADING_SIGNALS) * weight * 2;
-      }
-      const main = getMain();
-      if (main) {
-        const bodyText = main.textContent || "";
-        score += scoreSignals(bodyText, JOB_BODY_SIGNALS) * 1;
-      }
+      let signalTypes = 0;
       const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
       for (const script of jsonLdScripts) {
         try {
           const data = JSON.parse(script.textContent);
-          const type = data["@type"] || Array.isArray(data["@graph"]) && data["@graph"].find((n) => n["@type"] === "JobPosting");
-          if (type === "JobPosting" || typeof type === "object" && type?.["@type"] === "JobPosting") {
+          const types = [].concat(data["@type"] || []);
+          const graph = Array.isArray(data["@graph"]) ? data["@graph"] : [];
+          const hasJobPosting = types.includes("JobPosting") || graph.some((n) => [].concat(n["@type"] || []).includes("JobPosting"));
+          if (hasJobPosting) {
             return { detected: true, platform: "generic", confidence: 100 };
           }
         } catch {
         }
       }
       const ogType = document.querySelector('meta[property="og:type"]')?.getAttribute("content") ?? "";
-      if (ogType === "job") score += 20;
-      const detected = score >= 6;
+      if (ogType === "job") return { detected: true, platform: "generic", confidence: 100 };
+      const title = getPageTitle().toLowerCase();
+      const titleMatches = JOB_TITLE_SIGNALS.filter((s) => title.includes(s)).length;
+      if (titleMatches > 0) {
+        score += titleMatches * 4;
+        signalTypes++;
+      }
+      const headers = getHeaders();
+      let headerMatches = 0;
+      for (const h of headers) {
+        const text = h.textContent.trim().toLowerCase();
+        if (h.nodeName === "H1" || h.nodeName === "H2") {
+          headerMatches += JOB_HEADING_SIGNALS.filter((s) => text.includes(s)).length;
+        }
+      }
+      if (headerMatches > 0) {
+        score += headerMatches * 3;
+        signalTypes++;
+      }
+      const main = getMain();
+      if (main) {
+        const bodyText = (main.textContent || "").toLowerCase();
+        const bodyMatches = JOB_BODY_SIGNALS.filter((s) => bodyText.includes(s)).length;
+        if (bodyMatches >= 2) {
+          score += bodyMatches * 2;
+          signalTypes++;
+        }
+      }
+      const detected = score >= 12 && signalTypes >= 2;
       return { detected, platform: detected ? "generic" : null, confidence: score };
     }
     /**
@@ -715,21 +712,36 @@
       const extractor = getExtractor(platform);
       const jobDescription = extractor.extract();
       if (jobDescription && (jobDescription.title !== null || jobDescription.body !== null)) {
-        chrome.runtime.sendMessage({
-          type: "API_REQUEST",
-          endpoint: "http://localhost:3000/job-descriptions",
-          method: "POST",
-          body: jobDescription
-        }, (response) => {
-          if (response?.data?.id) {
-            jobDescription.id = response.data.id;
+        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (authState) => {
+          if (!authState || !authState.accessToken) {
+            const missingFields = JDExtractorBase.getMissingFields(jobDescription);
+            const warnings = ["Please log in to save this job and use AI features."];
+            mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
+            return;
           }
+          chrome.runtime.sendMessage({
+            type: "API_REQUEST",
+            endpoint: "http://localhost:3000/job-descriptions",
+            method: "POST",
+            body: {
+              ...jobDescription,
+              // Truncate body to 5000 chars to avoid payload size issues
+              body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null
+            }
+          }, (response) => {
+            if (response?.data?.id) {
+              jobDescription.id = response.data.id;
+            } else {
+              console.warn("[AJAH] Failed to save job description:", response?.error, response?.status);
+            }
+            const missingFields = JDExtractorBase.getMissingFields(jobDescription);
+            const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(", ")}`] : [];
+            mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
+          });
         });
+      } else {
+        return;
       }
-      const missingFields = JDExtractorBase.getMissingFields(jobDescription);
-      const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(", ")}`] : [];
-      const formFiller = new FormFiller();
-      mountOverlay({ platform, jobDescription, formFiller, warnings });
     } catch (err) {
       console.error("[content.js] init error:", err);
     }
@@ -848,17 +860,30 @@
     });
     const genBtn = shadow.getElementById("ajah-gen-btn");
     const clOutput = shadow.getElementById("ajah-cl-output");
-    genBtn.addEventListener("click", () => {
+    genBtn.addEventListener("click", async () => {
       const jobDescriptionId = jobDescription && jobDescription.id;
       if (!jobDescriptionId) {
-        clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+        clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
         return;
       }
       genBtn.disabled = true;
       genBtn.textContent = "Generating\u2026";
       clOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait\u2026</p>';
+      const resumeRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" },
+          (res) => resolve(res ?? { data: null, error: "No response" })
+        );
+      });
+      if (!resumeRes.data || !resumeRes.data.id) {
+        genBtn.disabled = false;
+        genBtn.textContent = "Generate Cover Letter";
+        clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
+        return;
+      }
+      const resumeId = resumeRes.data.id;
       chrome.runtime.sendMessage(
-        { type: "GENERATE_COVER_LETTER", jobDescriptionId },
+        { type: "GENERATE_COVER_LETTER", jobDescriptionId, resumeId },
         (response) => {
           genBtn.disabled = false;
           genBtn.textContent = "Generate Cover Letter";
@@ -898,10 +923,10 @@
     const answersBtn = shadow.getElementById("ajah-answers-btn");
     const answersOutput = shadow.getElementById("ajah-answers-output");
     const questionsInput = shadow.getElementById("ajah-questions-input");
-    answersBtn.addEventListener("click", () => {
+    answersBtn.addEventListener("click", async () => {
       const jobDescriptionId = jobDescription && jobDescription.id;
       if (!jobDescriptionId) {
-        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
         return;
       }
       const rawQuestions = questionsInput.value.trim();
@@ -913,8 +938,21 @@
       answersBtn.disabled = true;
       answersBtn.textContent = "Generating\u2026";
       answersOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait\u2026</p>';
+      const resumeRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" },
+          (res) => resolve(res ?? { data: null, error: "No response" })
+        );
+      });
+      if (!resumeRes.data || !resumeRes.data.id) {
+        answersBtn.disabled = false;
+        answersBtn.textContent = "Generate Answers";
+        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
+        return;
+      }
+      const resumeId = resumeRes.data.id;
       chrome.runtime.sendMessage(
-        { type: "GENERATE_ANSWERS", jobDescriptionId, questions },
+        { type: "GENERATE_ANSWERS", jobDescriptionId, resumeId, questions },
         (response) => {
           answersBtn.disabled = false;
           answersBtn.textContent = "Generate Answers";
@@ -962,7 +1000,7 @@
     appliedBtn.addEventListener("click", () => {
       const jobDescriptionId = jobDescription && jobDescription.id;
       if (!jobDescriptionId) {
-        appliedOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+        appliedOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
         return;
       }
       appliedBtn.disabled = true;

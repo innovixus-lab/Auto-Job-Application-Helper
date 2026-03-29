@@ -58,31 +58,42 @@ function getExtractor(platform) {
 
     const jobDescription = extractor.extract();
 
-    // Requirement 2.7: transmit structured job data to backend after extraction
+    // Save job description first, then mount overlay with the id
     if (jobDescription && (jobDescription.title !== null || jobDescription.body !== null)) {
-      chrome.runtime.sendMessage({
-        type: 'API_REQUEST',
-        endpoint: 'http://localhost:3000/job-descriptions',
-        method: 'POST',
-        body: jobDescription,
-      }, (response) => {
-        if (response?.data?.id) {
-          jobDescription.id = response.data.id;
+      // Check auth state first — don't attempt save if not logged in
+      chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, (authState) => {
+        if (!authState || !authState.accessToken) {
+          // Not logged in — still show overlay but without id (buttons will prompt to log in)
+          const missingFields = JDExtractorBase.getMissingFields(jobDescription);
+          const warnings = ['Please log in to save this job and use AI features.'];
+          mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
+          return;
         }
+
+        chrome.runtime.sendMessage({
+          type: 'API_REQUEST',
+          endpoint: 'http://localhost:3000/job-descriptions',
+          method: 'POST',
+          body: {
+            ...jobDescription,
+            // Truncate body to 5000 chars to avoid payload size issues
+            body: jobDescription.body ? jobDescription.body.slice(0, 5000) : null,
+          },
+        }, (response) => {
+          if (response?.data?.id) {
+            jobDescription.id = response.data.id;
+          } else {
+            console.warn('[AJAH] Failed to save job description:', response?.error, response?.status);
+          }
+          const missingFields = JDExtractorBase.getMissingFields(jobDescription);
+          const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(', ')}`] : [];
+          mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
+        });
       });
+    } else {
+      // Nothing useful extracted — don't show overlay
+      return;
     }
-
-    // Check for missing required fields and surface warnings
-    const missingFields = JDExtractorBase.getMissingFields(jobDescription);
-    const warnings = missingFields.length > 0
-      ? [`Missing fields: ${missingFields.join(', ')}`]
-      : [];
-
-    // TODO (task 9.1): replace stub with real Form_Filler
-    const formFiller = new FormFiller();
-
-    // TODO (task 11.1): replace stub with real Overlay mount
-    mountOverlay({ platform, jobDescription, formFiller, warnings });
   } catch (err) {
     console.error('[content.js] init error:', err);
   }
@@ -250,20 +261,36 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   // Wire up the Generate Cover Letter button
   const genBtn = shadow.getElementById('ajah-gen-btn');
   const clOutput = shadow.getElementById('ajah-cl-output');
-  genBtn.addEventListener('click', () => {
+  genBtn.addEventListener('click', async () => {
     const jobDescriptionId = jobDescription && jobDescription.id;
     if (!jobDescriptionId) {
-      clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+      clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
       return;
     }
 
-    // Show loading state
     genBtn.disabled = true;
     genBtn.textContent = 'Generating…';
     clOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait…</p>';
 
+    // Fetch resume id first
+    const resumeRes = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+        (res) => resolve(res ?? { data: null, error: 'No response' })
+      );
+    });
+
+    if (!resumeRes.data || !resumeRes.data.id) {
+      genBtn.disabled = false;
+      genBtn.textContent = 'Generate Cover Letter';
+      clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
+      return;
+    }
+
+    const resumeId = resumeRes.data.id;
+
     chrome.runtime.sendMessage(
-      { type: 'GENERATE_COVER_LETTER', jobDescriptionId },
+      { type: 'GENERATE_COVER_LETTER', jobDescriptionId, resumeId },
       (response) => {
         genBtn.disabled = false;
         genBtn.textContent = 'Generate Cover Letter';
@@ -307,10 +334,10 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   const answersOutput = shadow.getElementById('ajah-answers-output');
   const questionsInput = shadow.getElementById('ajah-questions-input');
 
-  answersBtn.addEventListener('click', () => {
+  answersBtn.addEventListener('click', async () => {
     const jobDescriptionId = jobDescription && jobDescription.id;
     if (!jobDescriptionId) {
-      answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+      answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
       return;
     }
 
@@ -322,13 +349,29 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
 
     const questions = rawQuestions.split('\n').map(q => q.trim()).filter(q => q.length > 0);
 
-    // Show loading state
     answersBtn.disabled = true;
     answersBtn.textContent = 'Generating…';
     answersOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait…</p>';
 
+    // Fetch resume id first
+    const resumeRes = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+        (res) => resolve(res ?? { data: null, error: 'No response' })
+      );
+    });
+
+    if (!resumeRes.data || !resumeRes.data.id) {
+      answersBtn.disabled = false;
+      answersBtn.textContent = 'Generate Answers';
+      answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
+      return;
+    }
+
+    const resumeId = resumeRes.data.id;
+
     chrome.runtime.sendMessage(
-      { type: 'GENERATE_ANSWERS', jobDescriptionId, questions },
+      { type: 'GENERATE_ANSWERS', jobDescriptionId, resumeId, questions },
       (response) => {
         answersBtn.disabled = false;
         answersBtn.textContent = 'Generate Answers';
@@ -381,7 +424,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   appliedBtn.addEventListener('click', () => {
     const jobDescriptionId = jobDescription && jobDescription.id;
     if (!jobDescriptionId) {
-      appliedOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Job description not yet saved. Please wait and try again.</p>';
+      appliedOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
       return;
     }
 

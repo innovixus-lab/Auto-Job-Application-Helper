@@ -38,32 +38,29 @@ export async function generateCoverLetter(
   const company = jd.company ?? 'your company';
   const jdBody = jd.body ?? '';
 
-  const systemPrompt = `You are an expert career coach and professional writer. 
-Write a concise, compelling cover letter in exactly three paragraphs:
-1. Opening paragraph: Express enthusiasm for the specific role ("${role}") at "${company}" and briefly state why you are a strong fit.
-2. Body paragraph: Highlight the candidate's most relevant work experience and skills that match the job requirements.
-3. Closing paragraph: Reiterate interest, invite further conversation, and include a clear call to action.
-Return only the cover letter text with no additional commentary, headers, or sign-off placeholders.`;
+  const systemPrompt = `You are an expert career coach and professional writer.
+Write a concise, compelling cover letter in exactly three paragraphs tailored to the SPECIFIC job below:
+1. Opening: Express enthusiasm for "${role}" at "${company}" — reference something specific about this role or company.
+2. Body: Match the candidate's most relevant experience and skills to the SPECIFIC requirements mentioned in the job description. Be concrete.
+3. Closing: Reiterate fit for THIS specific role, invite further conversation, clear call to action.
+Return only the cover letter text. No headers, no placeholders, no extra commentary.`;
 
-  const userPrompt = `Job Description:
+  const userPrompt = `JOB DESCRIPTION:
+Role: ${role} at ${company}
 ${jdBody}
 
-Candidate Resume:
+CANDIDATE:
 Name: ${resume.name}
-Email: ${resume.email}
-Skills: ${resume.skills.join(', ')}
+Skills: ${(resume.skills || []).join(', ')}
 Work Experience:
-${resume.workExperience
-  .map(
-    (e) =>
-      `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'}): ${e.description}`
-  )
-  .join('\n')}
+${(resume.workExperience || [])
+  .map((e) => `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'}): ${e.description}`)
+  .join('\n') || 'Not provided'}
 Education:
-${resume.education.map((e) => `- ${e.degree} from ${e.institution}`).join('\n')}
-Certifications: ${resume.certifications.join(', ')}
+${(resume.education || []).map((e) => `- ${e.degree} from ${e.institution}`).join('\n') || 'Not provided'}
+Certifications: ${(resume.certifications || []).join(', ') || 'None'}
 
-Write the cover letter now.`;
+Write the cover letter now, making sure it directly addresses the requirements of this specific job.`;
 
   let completion;
   try {
@@ -102,33 +99,40 @@ export async function generateAnswers(
   const jdBody = jd.body ?? '';
 
   const systemPrompt = `You are an expert career coach helping a candidate answer job application questions.
-For each question provided, write a concise, tailored answer (2-4 sentences) that:
-- For motivation questions (e.g. "Why do you want this job?"): references the specific role and company, and connects to the candidate's goals.
-- For behavioral questions (e.g. "Describe a challenge you overcame"): uses the STAR method (Situation, Task, Action, Result) drawing from the candidate's experience.
-- For competency questions (e.g. "What are your strengths?"): highlights relevant skills and experience from the resume that match the job requirements.
-Return ONLY a valid JSON array with objects having "question" and "answer" fields. No additional text.`;
+The candidate is applying for: ${role} at ${company}.
 
-  const userPrompt = `Job: ${role} at ${company}
-Job Description:
-${jdBody}
+CRITICAL INSTRUCTION: Each answer MUST be tailored to the SPECIFIC JOB REQUIREMENTS from the job description below. 
+- First, identify what the job requires for each question.
+- Then, show how the candidate's background meets THOSE SPECIFIC requirements.
+- Do NOT give generic answers based only on the resume — always connect back to what THIS job needs.
 
-Candidate Resume:
+Answer format per question type:
+- Motivation ("Why this role/company?"): Reference specific aspects of THIS job/company, then connect to candidate's goals.
+- Behavioral ("Tell me about a time..."): Use STAR method with a specific example from the candidate's experience that directly relates to a requirement of THIS job.
+- Competency ("What are your strengths?"): Name skills that THIS job description explicitly asks for, backed by candidate's experience.
+- General: 2-4 sentences, job-specific, concrete.
+
+Return ONLY a valid JSON array: [{"question": "...", "answer": "..."}, ...]. No extra text.`;
+
+  const userPrompt = `JOB DESCRIPTION FOR ${role.toUpperCase()} AT ${company.toUpperCase()}:
+${jdBody || `Title: ${role}, Company: ${company}`}
+
+---
+CANDIDATE BACKGROUND (use to support answers, but always tie back to the job above):
 Name: ${resume.name}
-Skills: ${resume.skills.join(', ')}
+Skills: ${(resume.skills || []).join(', ')}
 Work Experience:
-${resume.workExperience
-  .map(
-    (e) =>
-      `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'}): ${e.description}`
-  )
-  .join('\n')}
+${(resume.workExperience || [])
+  .map((e) => `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'}): ${e.description}`)
+  .join('\n') || 'Not provided'}
 Education:
-${resume.education.map((e) => `- ${e.degree} from ${e.institution}`).join('\n')}
+${(resume.education || []).map((e) => `- ${e.degree} from ${e.institution}`).join('\n') || 'Not provided'}
 
-Questions to answer:
+---
+QUESTIONS TO ANSWER (tailor each answer to the job description above):
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
-Return a JSON array like: [{"question": "...", "answer": "..."}, ...]`;
+Return JSON array: [{"question": "...", "answer": "..."}, ...]`;
 
   let completion;
   try {

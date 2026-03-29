@@ -58,37 +58,32 @@ function getPageTitle() {
 
 // ── Job signal keywords ───────────────────────────────────────────────────────
 
+// High-confidence signals — these strongly indicate a job posting page
 const JOB_TITLE_SIGNALS = [
-  'job', 'career', 'position', 'opening', 'vacancy', 'role', 'hiring',
-  'apply', 'application', 'engineer', 'developer', 'designer', 'manager',
-  'analyst', 'intern', 'full-time', 'part-time', 'remote', 'on-site',
+  'job opening', 'job posting', 'job vacancy', 'career opportunity',
+  'we are hiring', 'now hiring', 'apply now', 'apply for this job',
+  'job description', 'position available',
 ];
 
+// Body signals — sections typically found in job descriptions
 const JOB_BODY_SIGNALS = [
-  'responsibilities', 'requirements', 'qualifications', 'what you\'ll do',
-  'what we\'re looking for', 'about the role', 'about the job',
-  'job description', 'job summary', 'we are looking for', 'you will',
-  'must have', 'nice to have', 'benefits', 'compensation', 'salary',
-  'apply now', 'submit your application', 'equal opportunity',
+  'responsibilities', 'requirements', 'qualifications',
+  'what you\'ll do', 'what we\'re looking for',
+  'about the role', 'about the job',
+  'must have', 'nice to have',
+  'equal opportunity employer',
+  'submit your application', 'apply for this position',
 ];
 
+// Heading signals — h2/h3 headings that appear inside job postings
 const JOB_HEADING_SIGNALS = [
-  'about the role', 'about the job', 'the role', 'what you\'ll do',
-  'responsibilities', 'requirements', 'qualifications', 'benefits',
-  'who you are', 'what we offer', 'about us', 'your responsibilities',
+  'about the role', 'about the job', 'the role',
+  'what you\'ll do', 'responsibilities', 'requirements',
+  'qualifications', 'benefits', 'who you are',
+  'what we offer', 'your responsibilities',
+  'job requirements', 'job responsibilities',
 ];
 
-/**
- * Scores a text string against a list of signal keywords.
- * Returns the count of signals found.
- * @param {string} text
- * @param {string[]} signals
- * @returns {number}
- */
-function scoreSignals(text, signals) {
-  const lower = text.toLowerCase();
-  return signals.filter((s) => lower.includes(s)).length;
-}
 
 // ── Main detector class ───────────────────────────────────────────────────────
 
@@ -156,46 +151,53 @@ export class JobDetector {
     }
 
     let score = 0;
+    let signalTypes = 0; // how many distinct signal categories matched
 
-    // 1. Page title signals (web-reader: getTitle())
-    const title = getPageTitle();
-    score += scoreSignals(title, JOB_TITLE_SIGNALS) * 2; // title is high-signal
-
-    // 2. Header signals (web-reader: getHeaders())
-    const headers = getHeaders();
-    for (const h of headers) {
-      const text = h.textContent.trim().toLowerCase();
-      // h1 is highest signal
-      const weight = h.nodeName === 'H1' ? 3 : h.nodeName === 'H2' ? 2 : 1;
-      score += scoreSignals(text, JOB_TITLE_SIGNALS) * weight;
-      score += scoreSignals(text, JOB_HEADING_SIGNALS) * weight * 2;
-    }
-
-    // 3. Main content signals (web-reader: getMain())
-    const main = getMain();
-    if (main) {
-      const bodyText = main.textContent || '';
-      score += scoreSignals(bodyText, JOB_BODY_SIGNALS) * 1;
-    }
-
-    // 4. Structured data — JSON-LD JobPosting schema
+    // 1. JSON-LD JobPosting schema — instant confident detection
     const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
     for (const script of jsonLdScripts) {
       try {
         const data = JSON.parse(script.textContent);
-        const type = data['@type'] || (Array.isArray(data['@graph']) && data['@graph'].find(n => n['@type'] === 'JobPosting'));
-        if (type === 'JobPosting' || (typeof type === 'object' && type?.['@type'] === 'JobPosting')) {
+        const types = [].concat(data['@type'] || []);
+        const graph = Array.isArray(data['@graph']) ? data['@graph'] : [];
+        const hasJobPosting = types.includes('JobPosting') ||
+          graph.some(n => [].concat(n['@type'] || []).includes('JobPosting'));
+        if (hasJobPosting) {
           return { detected: true, platform: 'generic', confidence: 100 };
         }
       } catch { /* ignore malformed JSON-LD */ }
     }
 
-    // 5. Meta tags
+    // 2. Meta og:type = "job"
     const ogType = document.querySelector('meta[property="og:type"]')?.getAttribute('content') ?? '';
-    if (ogType === 'job') score += 20;
+    if (ogType === 'job') return { detected: true, platform: 'generic', confidence: 100 };
 
-    // Threshold: score ≥ 6 is a confident job page detection
-    const detected = score >= 6;
+    // 3. Page title — must contain multi-word job phrases (not single words)
+    const title = getPageTitle().toLowerCase();
+    const titleMatches = JOB_TITLE_SIGNALS.filter(s => title.includes(s)).length;
+    if (titleMatches > 0) { score += titleMatches * 4; signalTypes++; }
+
+    // 4. Header signals — only h1/h2 with exact job heading phrases
+    const headers = getHeaders();
+    let headerMatches = 0;
+    for (const h of headers) {
+      const text = h.textContent.trim().toLowerCase();
+      if (h.nodeName === 'H1' || h.nodeName === 'H2') {
+        headerMatches += JOB_HEADING_SIGNALS.filter(s => text.includes(s)).length;
+      }
+    }
+    if (headerMatches > 0) { score += headerMatches * 3; signalTypes++; }
+
+    // 5. Body signals — require multiple matches in main content
+    const main = getMain();
+    if (main) {
+      const bodyText = (main.textContent || '').toLowerCase();
+      const bodyMatches = JOB_BODY_SIGNALS.filter(s => bodyText.includes(s)).length;
+      if (bodyMatches >= 2) { score += bodyMatches * 2; signalTypes++; }
+    }
+
+    // Require score ≥ 12 AND at least 2 distinct signal types
+    const detected = score >= 12 && signalTypes >= 2;
     return { detected, platform: detected ? 'generic' : null, confidence: score };
   }
 

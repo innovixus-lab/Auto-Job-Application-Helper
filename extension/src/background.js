@@ -148,15 +148,27 @@ function handleDetectJob({ tabId, url }, sendResponse) {
  */
 async function handleApiRequest({ endpoint, method = 'GET', body }, sendResponse) {
   try {
-    const { accessToken } = await getStoredTokens();
-    const response = await fetch(endpoint, {
+    let { accessToken } = await getStoredTokens();
+
+    const doFetch = (token) => fetch(endpoint, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
+
+    let response = await doFetch(accessToken);
+
+    // Auto-refresh on 401 and retry once
+    if (response.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        response = await doFetch(newToken);
+      }
+    }
+
     const data = await response.json();
     sendResponse({ data: data.data ?? data, error: data.error ?? null, status: response.status });
   } catch (err) {
@@ -176,11 +188,52 @@ async function handleGetAuthState(sendResponse) {
 }
 
 /**
+ * Attempts to refresh the access token using the stored refresh token.
+ * Stores the new access token if successful.
+ * @returns {Promise<string|null>} new accessToken or null on failure
+ */
+async function refreshAccessToken() {
+  const { refreshToken } = await new Promise((resolve) => {
+    chrome.storage.local.get(['refreshToken'], resolve);
+  });
+
+  if (!refreshToken) return null;
+
+  try {
+    const response = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      // Refresh token is invalid/expired — clear storage
+      await chrome.storage.local.remove(['accessToken', 'refreshToken', 'user']);
+      return null;
+    }
+
+    const data = await response.json();
+    const newAccessToken = data.data?.accessToken;
+    if (newAccessToken) {
+      await chrome.storage.local.set({ accessToken: newAccessToken });
+      return newAccessToken;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * { type: "REFRESH_TOKEN" } → { accessToken } | { error }
- * TODO (task 2.3): call POST /auth/refresh and store new token
  */
 async function handleRefreshToken(sendResponse) {
-  sendResponse({ error: 'Not implemented yet' });
+  const newToken = await refreshAccessToken();
+  if (newToken) {
+    sendResponse({ accessToken: newToken, error: null });
+  } else {
+    sendResponse({ accessToken: null, error: 'Token refresh failed' });
+  }
 }
 
 /**
@@ -189,10 +242,9 @@ async function handleRefreshToken(sendResponse) {
  */
 async function handleUploadResume({ fileData, filename, mimetype }, sendResponse) {
   try {
-    const { accessToken } = await getStoredTokens();
-    console.log('[UPLOAD] accessToken present:', !!accessToken, accessToken ? accessToken.slice(0, 20) + '…' : 'MISSING');
+    let { accessToken } = await getStoredTokens();
 
-    // Decode base64 data URL (e.g. "data:application/pdf;base64,<data>") to binary
+    // Decode base64 data URL to binary
     const base64 = fileData.split(',')[1];
     const binaryStr = atob(base64);
     const bytes = new Uint8Array(binaryStr.length);
@@ -201,17 +253,25 @@ async function handleUploadResume({ fileData, filename, mimetype }, sendResponse
     }
     const blob = new Blob([bytes], { type: mimetype });
 
-    const formData = new FormData();
-    formData.append('file', blob, filename);
+    const doUpload = async (token) => {
+      const formData = new FormData();
+      formData.append('file', blob, filename);
+      return fetch(`${BASE_URL}/resumes`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
+      });
+    };
 
-    const BASE_URL = 'http://localhost:3000';
-    const response = await fetch(`${BASE_URL}/resumes`, {
-      method: 'POST',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: formData,
-    });
+    let response = await doUpload(accessToken);
+
+    // Auto-refresh on 401 and retry once
+    if (response.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        response = await doUpload(newToken);
+      }
+    }
 
     const json = await response.json();
     if (!response.ok) {
