@@ -5,335 +5,555 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Auto Job Application Helper</title>
   <style>
-    * {
-      box-sizing: border-box;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Theme tokens ── */
+    :root {
+      --accent: #6366f1;
+      --accent-2: #8b5cf6;
+      --accent-glow: rgba(99,102,241,0.35);
+
+      /* light */
+      --bg: rgba(255,255,255,0.55);
+      --bg-solid: #f1f5ff;
+      --surface: rgba(255,255,255,0.45);
+      --surface-border: rgba(255,255,255,0.7);
+      --surface-hover: rgba(255,255,255,0.65);
+      --text: #0f0f1a;
+      --text-muted: #6b7280;
+      --input-bg: rgba(255,255,255,0.5);
+      --input-border: rgba(99,102,241,0.25);
+      --divider: rgba(99,102,241,0.12);
+      --badge-bg: rgba(99,102,241,0.1);
+      --badge-text: #4f46e5;
+      --blur: blur(18px);
+      --shadow: 0 8px 32px rgba(99,102,241,0.15), 0 1px 0 rgba(255,255,255,0.8) inset;
+      --shadow-sm: 0 4px 16px rgba(99,102,241,0.1);
+      --btn-text: #fff;
     }
+
+    [data-theme="dark"] {
+      --bg: rgba(10,10,20,0.75);
+      --bg-solid: #0d0d1f;
+      --surface: rgba(255,255,255,0.06);
+      --surface-border: rgba(255,255,255,0.1);
+      --surface-hover: rgba(255,255,255,0.1);
+      --text: #f0f0ff;
+      --text-muted: #9ca3af;
+      --input-bg: rgba(255,255,255,0.07);
+      --input-border: rgba(99,102,241,0.3);
+      --divider: rgba(255,255,255,0.08);
+      --badge-bg: rgba(99,102,241,0.2);
+      --badge-text: #a5b4fc;
+      --shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.05) inset;
+      --shadow-sm: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
     body {
-      width: 320px;
-      max-width: 100%;
-      min-height: 200px;
-      margin: 0;
-      padding: 16px;
-      font-family: sans-serif;
-      font-size: 14px;
-      color: #1a1a1a;
-      background: #ffffff;
+      width: 340px;
+      min-height: 220px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg-solid);
+      padding: 14px;
       overflow-x: hidden;
+      transition: background 0.3s, color 0.3s;
     }
+
+    /* ── Glass surface ── */
+    .glass {
+      background: var(--surface);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    /* ── Header ── */
     header {
-      font-weight: 600;
-      font-size: 15px;
-      margin-bottom: 12px;
-    }
-    #status {
-      color: #555;
-      font-size: 13px;
-    }
-    nav {
-      margin-top: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    nav button {
-      padding: 8px 12px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #f5f5f5;
-      cursor: pointer;
-      text-align: left;
-      font-size: 13px;
-    }
-    nav button:hover {
-      background: #e8e8e8;
-    }
-
-    /* ── Auth view ─────────────────────────────────────────────────────── */
-    .tab-switcher {
-      display: flex;
-      border-bottom: 1px solid #ccc;
-      margin-bottom: 12px;
-    }
-    .tab-btn {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-size: 13px;
-      color: #555;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-    }
-    .tab-btn.active {
-      color: #1a1a1a;
-      font-weight: 600;
-      border-bottom-color: #4a90e2;
-    }
-    .auth-form {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .auth-form input {
-      padding: 7px 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 13px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .auth-form button[type="submit"] {
-      padding: 8px;
-      background: #4a90e2;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .auth-form button[type="submit"]:hover {
-      background: #357abd;
-    }
-    .auth-message {
-      font-size: 12px;
-      margin-top: 4px;
-      min-height: 16px;
-    }
-    .auth-message.error { color: #c0392b; }
-    .auth-message.success { color: #27ae60; }
-
-    /* ── Settings view ─────────────────────────────────────────────────── */
-    .settings-row {
-      margin-bottom: 12px;
-    }
-    .settings-row label {
-      display: block;
-      font-size: 12px;
-      color: #555;
-      margin-bottom: 3px;
-    }
-    .settings-row input[readonly] {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 6px 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background: #f9f9f9;
-      font-size: 13px;
-      color: #333;
-    }
-    .tier-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .tier-badge.free { background: #e8e8e8; color: #555; }
-    .tier-badge.premium { background: #fef3cd; color: #856404; }
-    .settings-section-title {
-      font-size: 13px;
-      font-weight: 600;
-      margin: 12px 0 8px;
-    }
-    .settings-form {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .settings-form input {
-      padding: 7px 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 13px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .btn-danger {
-      padding: 8px 12px;
-      background: #e74c3c;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      width: 100%;
-    }
-    .btn-danger:hover { background: #c0392b; }
-    .btn-primary {
-      padding: 8px 12px;
-      background: #4a90e2;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .btn-primary:hover { background: #357abd; }
-    .btn-back {
-      margin-top: 8px;
-      font-size: 12px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #666;
-      padding: 0;
-    }
-    .settings-message {
-      font-size: 12px;
-      margin-top: 4px;
-      min-height: 16px;
-    }
-    .settings-message.error { color: #c0392b; }
-    .settings-message.success { color: #27ae60; }
-
-    /* ── Dashboard view ────────────────────────────────────────────────── */
-    .dashboard-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 0;
-      border-bottom: 1px solid #eee;
-      font-size: 12px;
-    }
-    .dashboard-row:last-child { border-bottom: none; }
-    .dashboard-row .job-title {
-      font-weight: 600;
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .dashboard-row .company {
-      color: #555;
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .dashboard-row .applied-date {
-      color: #888;
-      white-space: nowrap;
-    }
-    .dashboard-row select {
-      font-size: 11px;
-      padding: 2px 4px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-    }
-    .dashboard-pagination {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-top: 10px;
-      font-size: 12px;
+      margin-bottom: 14px;
     }
-    .dashboard-pagination button {
-      padding: 4px 10px;
-      font-size: 12px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #f5f5f5;
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .header-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px;
+      box-shadow: 0 4px 14px var(--accent-glow);
+      flex-shrink: 0;
+    }
+    .header-title { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .header-sub   { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+
+    /* ── Theme toggle ── */
+    .theme-toggle {
+      width: 32px; height: 32px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
       cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      backdrop-filter: var(--blur);
+      transition: background 0.2s;
+      flex-shrink: 0;
     }
-    .dashboard-pagination button:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-    #dashboard-status {
+    .theme-toggle:hover { background: var(--surface-hover); }
+
+    /* ── Inputs ── */
+    .glass-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      backdrop-filter: var(--blur);
+      font-family: 'Inter', sans-serif;
       font-size: 12px;
-      color: #555;
-      margin-bottom: 8px;
-      min-height: 16px;
+      font-weight: 500;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
+    .glass-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .glass-input[readonly] { opacity: 0.7; cursor: default; }
+    .glass-input::placeholder { color: var(--text-muted); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 14px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover  { opacity: 0.88; }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #f87171);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(239,68,68,0.3);
+    }
+    .btn-upgrade {
+      background: linear-gradient(135deg, #f59e0b, #fbbf24);
+      color: #1a0a00;
+      box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+    }
+    .btn-ghost {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      backdrop-filter: var(--blur);
+    }
+    .btn-ghost:hover { background: var(--surface-hover); }
+    .btn-back {
+      background: none; border: none;
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px; font-weight: 600;
+      cursor: pointer; padding: 6px 0;
+      width: auto; display: inline-flex; align-items: center; gap: 4px;
+      transition: color 0.2s;
+    }
+    .btn-back:hover { color: var(--accent); }
+
+    /* ── Tab switcher ── */
+    .tab-switcher {
+      display: flex;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+      margin-bottom: 12px;
+      backdrop-filter: var(--blur);
+    }
+    .tab-btn {
+      flex: 1; padding: 7px;
+      border: none; background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      box-shadow: 0 2px 8px var(--accent-glow);
+    }
+
+    /* ── Auth form ── */
+    .auth-form { display: flex; flex-direction: column; gap: 8px; }
+    .auth-message {
+      font-size: 11px; font-weight: 500;
+      min-height: 16px; text-align: center;
+      padding: 5px 8px; border-radius: 8px;
+      margin-top: 6px;
+    }
+    .auth-message.error   { background: rgba(239,68,68,0.1);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+    .auth-message.success { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+
+    /* ── Status pill ── */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 50px;
+      padding: 5px 12px;
+      font-size: 11px; font-weight: 600;
+      color: var(--text);
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+    }
+
+    /* ── Usage bar ── */
+    .usage-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-sm);
+    }
+    .usage-label {
+      font-size: 10px; font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+    .usage-track {
+      height: 5px;
+      background: var(--divider);
+      border-radius: 50px; overflow: hidden;
+    }
+    .usage-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 50px;
+      transition: width 0.4s ease;
+    }
+    .usage-text {
+      font-size: 10px; font-weight: 600;
+      color: var(--accent); margin-top: 4px;
+    }
+
+    /* ── Nav buttons ── */
+    .nav-grid { display: flex; flex-direction: column; gap: 7px; }
+    .nav-btn {
+      display: flex; align-items: center; gap: 11px;
+      padding: 11px 13px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px; font-weight: 600;
+      color: var(--text);
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-sm);
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      text-align: left;
+    }
+    .nav-btn:hover {
+      background: var(--surface-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px var(--accent-glow);
+    }
+    .nav-btn:active { transform: scale(0.98); }
+    .nav-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .nav-icon.indigo  { background: rgba(99,102,241,0.15); }
+    .nav-icon.violet  { background: rgba(139,92,246,0.15); }
+    .nav-icon.emerald { background: rgba(16,185,129,0.15); }
+    .nav-icon.amber   { background: rgba(245,158,11,0.15); }
+    .nav-label { font-size: 12px; font-weight: 600; color: var(--text); }
+    .nav-desc  { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+    .nav-arrow { margin-left: auto; color: var(--text-muted); font-size: 13px; }
+
+    /* ── Section title ── */
+    .section-title {
+      font-size: 14px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-icon {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      background: rgba(99,102,241,0.12);
+    }
+
+    /* ── Settings ── */
+    .field { margin-bottom: 10px; }
+    .field-label {
+      display: block;
+      font-size: 10px; font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      margin-bottom: 4px;
+    }
+    .tier-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 50px;
+      font-size: 11px; font-weight: 600;
+      background: var(--badge-bg); color: var(--badge-text);
+      border: 1px solid var(--input-border);
+    }
+    .tier-badge.premium {
+      background: rgba(245,158,11,0.12);
+      color: #f59e0b;
+      border-color: rgba(245,158,11,0.25);
+    }
+    .divider { height: 1px; background: var(--divider); margin: 12px 0; }
+    .settings-message {
+      font-size: 11px; font-weight: 500;
+      min-height: 16px; padding: 5px 8px; border-radius: 8px;
+    }
+    .settings-message.error   { background: rgba(239,68,68,0.1);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+    .settings-message.success { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+
+    /* ── Resume upload ── */
+    .drop-zone {
+      border: 1.5px dashed var(--input-border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      background: var(--input-bg);
+      backdrop-filter: var(--blur);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 10px;
+    }
+    .drop-zone:hover { border-color: var(--accent); background: var(--surface-hover); }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-icon { font-size: 26px; margin-bottom: 5px; }
+    .drop-text { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .drop-hint { font-size: 10px; color: var(--text-muted); opacity: 0.7; margin-top: 2px; }
+    .drop-filename { font-size: 11px; font-weight: 600; color: var(--accent); margin-top: 4px; }
+    #upload-status {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-muted);
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-height: 34px;
+      line-height: 1.5;
+      backdrop-filter: var(--blur);
+    }
+
+    /* ── Dashboard ── */
+    #dashboard-status {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-muted); margin-bottom: 8px; min-height: 14px;
+    }
+    .app-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 7px;
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-sm);
+    }
+    .app-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 5px; }
+    .app-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .app-company { font-size: 10px; font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .app-date { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+    .app-select {
+      font-family: 'Inter', sans-serif;
+      font-size: 10px; font-weight: 600;
+      padding: 3px 7px;
+      border: 1px solid var(--input-border);
+      border-radius: 7px;
+      background: var(--input-bg);
+      color: var(--accent);
+      cursor: pointer; outline: none;
+      backdrop-filter: var(--blur);
+    }
+    .pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 10px; gap: 8px;
+    }
+    .pagination button {
+      padding: 5px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px; font-weight: 600;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      backdrop-filter: var(--blur);
+      transition: background 0.2s;
+    }
+    .pagination button:hover:not(:disabled) { background: var(--surface-hover); }
+    .pagination button:disabled { opacity: 0.35; cursor: default; }
+    #dashboard-page-info { font-size: 11px; font-weight: 600; color: var(--text-muted); }
   </style>
 </head>
 <body>
-  <header>Auto Job Application Helper</header>
 
-  <!-- ── Auth view (shown when not logged in) ──────────────────────────── -->
-  <section id="view-auth" style="display:none;">
-    <div class="tab-switcher">
-      <button class="tab-btn active" id="tab-login">Login</button>
-      <button class="tab-btn" id="tab-register">Register</button>
+  <header>
+    <div class="header-left">
+      <div class="header-icon">🚀</div>
+      <div>
+        <div class="header-title">Job Helper</div>
+        <div class="header-sub">Auto Application Assistant</div>
+      </div>
     </div>
+    <button class="theme-toggle" id="btn-theme" title="Toggle theme">🌙</button>
+  </header>
 
-    <!-- Login form -->
-    <form class="auth-form" id="form-login">
-      <input type="email" id="login-email" placeholder="Email" required />
-      <input type="password" id="login-password" placeholder="Password" required />
-      <button type="submit">Login</button>
-    </form>
-
-    <!-- Register form -->
-    <form class="auth-form" id="form-register" style="display:none;">
-      <input type="email" id="register-email" placeholder="Email" required />
-      <input type="password" id="register-password" placeholder="Password" required />
-      <input type="password" id="register-confirm" placeholder="Confirm Password" required />
-      <button type="submit">Register</button>
-    </form>
-
-    <div class="auth-message" id="auth-message"></div>
+  <!-- ── Auth view ── -->
+  <section id="view-auth" style="display:none;">
+    <div class="glass" style="padding:14px;">
+      <div class="tab-switcher">
+        <button class="tab-btn active" id="tab-login">Login</button>
+        <button class="tab-btn" id="tab-register">Register</button>
+      </div>
+      <form class="auth-form" id="form-login">
+        <input class="glass-input" type="email" id="login-email" placeholder="Email" required />
+        <input class="glass-input" type="password" id="login-password" placeholder="Password" required />
+        <button class="btn btn-primary" type="submit">Login</button>
+      </form>
+      <form class="auth-form" id="form-register" style="display:none;">
+        <input class="glass-input" type="email" id="register-email" placeholder="Email" required />
+        <input class="glass-input" type="password" id="register-password" placeholder="Password" required />
+        <input class="glass-input" type="password" id="register-confirm" placeholder="Confirm Password" required />
+        <button class="btn btn-primary" type="submit">Create Account</button>
+      </form>
+      <div class="auth-message" id="auth-message"></div>
+    </div>
   </section>
 
-  <!-- ── Main view (shown when logged in) ──────────────────────────────── -->
+  <!-- ── Main view ── -->
   <section id="view-main" style="display:none;">
-    <div id="status">Loading…</div>
-    <div id="usage-credits" style="font-size:12px;color:#555;margin-top:4px;"></div>
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      <span id="status">Loading…</span>
+    </div>
 
-    <nav>
-      <button id="btn-resume">Upload Resume</button>
-      <button id="btn-dashboard">Dashboard</button>
-      <button id="btn-settings">Account Settings</button>
-      <button id="btn-upgrade" style="display:none;">Upgrade to Premium</button>
+    <div class="usage-card">
+      <div class="usage-label">Cover Letters This Month</div>
+      <div class="usage-track">
+        <div class="usage-fill" id="usage-bar" style="width:0%"></div>
+      </div>
+      <div class="usage-text" id="usage-credits"></div>
+    </div>
+
+    <nav class="nav-grid">
+      <button class="nav-btn" id="btn-resume">
+        <div class="nav-icon indigo">📄</div>
+        <div><div class="nav-label">Upload Resume</div><div class="nav-desc">Manage your resume</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
+      <button class="nav-btn" id="btn-dashboard">
+        <div class="nav-icon emerald">📊</div>
+        <div><div class="nav-label">Dashboard</div><div class="nav-desc">Track applications</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
+      <button class="nav-btn" id="btn-settings">
+        <div class="nav-icon violet">⚙️</div>
+        <div><div class="nav-label">Account Settings</div><div class="nav-desc">Profile & password</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
+      <button class="nav-btn" id="btn-upgrade" style="display:none;">
+        <div class="nav-icon amber">⭐</div>
+        <div><div class="nav-label">Upgrade to Premium</div><div class="nav-desc">Unlimited cover letters</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
     </nav>
   </section>
 
-  <!-- ── Resume upload view ─────────────────────────────────────────────── -->
+  <!-- ── Resume upload view ── -->
   <section id="view-resume" style="display:none;">
-    <h2 style="font-size:14px;margin:0 0 8px;">Upload Resume</h2>
-    <input type="file" id="resume-file-input" accept=".pdf,.docx" style="font-size:12px;width:100%;" />
-    <button id="btn-upload-resume" style="margin-top:8px;padding:6px 12px;width:100%;cursor:pointer;">Upload</button>
-    <div id="upload-status" style="margin-top:8px;font-size:12px;color:#555;"></div>
-    <button id="btn-back-from-resume" class="btn-back">← Back</button>
+    <div class="section-title"><div class="section-icon">📄</div>Upload Resume</div>
+    <label class="drop-zone" for="resume-file-input">
+      <input type="file" id="resume-file-input" accept=".pdf,.docx" />
+      <div class="drop-icon">📁</div>
+      <div class="drop-text">Click to choose a file</div>
+      <div class="drop-hint">PDF or DOCX</div>
+      <div class="drop-filename" id="file-selected-name"></div>
+    </label>
+    <button class="btn btn-primary" id="btn-upload-resume" style="margin-bottom:10px;">Upload</button>
+    <div id="upload-status"></div>
+    <button class="btn-back" id="btn-back-from-resume" style="margin-top:8px;">← Back</button>
   </section>
 
-  <!-- ── Account Settings view ─────────────────────────────────────────── -->
+  <!-- ── Settings view ── -->
   <section id="view-settings" style="display:none;">
-    <div class="settings-row">
-      <label>Email</label>
-      <input type="email" id="settings-email" readonly />
+    <div class="section-title"><div class="section-icon">⚙️</div>Account Settings</div>
+    <div class="glass" style="padding:14px;">
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="glass-input" type="email" id="settings-email" readonly />
+      </div>
+      <div class="field">
+        <label class="field-label">Plan</label>
+        <span class="tier-badge free" id="settings-tier-badge">Free</span>
+      </div>
+      <button class="btn btn-danger" id="btn-logout">Logout</button>
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Change Password</div>
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <input class="glass-input" type="password" id="settings-current-password" placeholder="Current password" />
+        <input class="glass-input" type="password" id="settings-new-password" placeholder="New password" />
+        <button class="btn btn-primary" id="btn-change-password">Confirm</button>
+      </div>
+      <div class="settings-message" id="settings-message" style="margin-top:8px;"></div>
     </div>
-    <div class="settings-row">
-      <label>Plan</label>
-      <span class="tier-badge free" id="settings-tier-badge">Free</span>
-    </div>
-
-    <button class="btn-danger" id="btn-logout">Logout</button>
-
-    <div class="settings-section-title">Change Password</div>
-    <div class="settings-form">
-      <input type="password" id="settings-current-password" placeholder="Current password" />
-      <input type="password" id="settings-new-password" placeholder="New password" />
-      <button class="btn-primary" id="btn-change-password">Confirm</button>
-    </div>
-    <div class="settings-message" id="settings-message"></div>
-
-    <button class="btn-back" id="btn-back-from-settings">← Back</button>
+    <button class="btn-back" id="btn-back-from-settings" style="margin-top:10px;">← Back</button>
   </section>
 
-  <!-- ── Dashboard view ───────────────────────────────────────────────── -->
+  <!-- ── Dashboard view ── -->
   <section id="view-dashboard" style="display:none;">
-    <h2 style="font-size:14px;margin:0 0 8px;">Dashboard</h2>
+    <div class="section-title"><div class="section-icon">📊</div>Dashboard</div>
     <div id="dashboard-status"></div>
     <div id="dashboard-list"></div>
-    <div class="dashboard-pagination">
-      <button id="btn-dashboard-prev">Previous</button>
+    <div class="pagination">
+      <button id="btn-dashboard-prev">← Prev</button>
       <span id="dashboard-page-info">Page 1</span>
-      <button id="btn-dashboard-next">Next</button>
+      <button id="btn-dashboard-next">Next →</button>
     </div>
-    <button class="btn-back" id="btn-back-from-dashboard">← Back</button>
+    <button class="btn-back" id="btn-back-from-dashboard" style="margin-top:10px;">← Back</button>
   </section>
 
   <script src="popup.js"></script>

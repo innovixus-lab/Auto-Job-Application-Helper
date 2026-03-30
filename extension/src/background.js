@@ -60,6 +60,18 @@ class JobDetector {
   }
 }
 
+// ── Service worker keepalive ─────────────────────────────────────────────────
+// MV3 service workers terminate after ~30s of inactivity.
+// Using chrome.storage as a no-op heartbeat keeps it alive during long fetches.
+function swKeepalive() {
+  const interval = setInterval(() => {
+    chrome.storage.local.get('_ping', () => {
+      if (chrome.runtime.lastError) clearInterval(interval);
+    });
+  }, 20000);
+  return interval;
+}
+
 // ── Tab update listener ──────────────────────────────────────────────────────
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -147,6 +159,7 @@ function handleDetectJob({ tabId, url }, sendResponse) {
  * TODO (task 2.7 / 5.x): add auth header and forward to backend
  */
 async function handleApiRequest({ endpoint, method = 'GET', body }, sendResponse) {
+  const keepalive = swKeepalive();
   try {
     let { accessToken } = await getStoredTokens();
 
@@ -173,6 +186,8 @@ async function handleApiRequest({ endpoint, method = 'GET', body }, sendResponse
     sendResponse({ data: data.data ?? data, error: data.error ?? null, status: response.status });
   } catch (err) {
     sendResponse({ data: null, error: err.message, status: 0 });
+  } finally {
+    clearInterval(keepalive);
   }
 }
 

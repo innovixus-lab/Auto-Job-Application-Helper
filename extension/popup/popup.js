@@ -4,8 +4,27 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   initPopup();
 });
+
+// ── Theme ────────────────────────────────────────────────────────────────────
+
+function initTheme() {
+  const saved = localStorage.getItem('ajah-theme') || 'light';
+  applyTheme(saved);
+  document.getElementById('btn-theme').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('ajah-theme', theme);
+  const btn = document.getElementById('btn-theme');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
@@ -66,14 +85,16 @@ function renderStatus({ user, tier }) {
  */
 async function renderUsage(tier) {
   const usageEl = document.getElementById('usage-credits');
+  const barEl = document.getElementById('usage-bar');
   if (!usageEl) return;
 
   if (tier === 'premium') {
-    usageEl.textContent = 'Cover letters: Unlimited';
+    usageEl.textContent = 'Unlimited ✦';
+    if (barEl) barEl.style.width = '100%';
     return;
   }
 
-  usageEl.textContent = 'Loading credits…';
+  usageEl.textContent = 'Loading…';
 
   const response = await new Promise((resolve) => {
     chrome.runtime.sendMessage(
@@ -85,9 +106,12 @@ async function renderUsage(tier) {
   if (response.data && typeof response.data.coverLettersUsed === 'number') {
     const used = response.data.coverLettersUsed;
     const remaining = Math.max(0, 5 - used);
-    usageEl.textContent = `Cover letters: ${used}/5 used this month (${remaining} remaining)`;
+    const pct = Math.min(100, (used / 5) * 100);
+    if (barEl) barEl.style.width = `${pct}%`;
+    usageEl.textContent = `${used}/5 used · ${remaining} remaining`;
   } else {
-    usageEl.textContent = 'Cover letters: usage unavailable';
+    usageEl.textContent = 'Usage unavailable';
+    if (barEl) barEl.style.width = '0%';
   }
 }
 
@@ -254,24 +278,34 @@ async function loadDashboard(page) {
   statusEl.textContent = '';
 
   applications.forEach((app) => {
-    const row = document.createElement('div');
-    row.className = 'dashboard-row';
+    const card = document.createElement('div');
+    card.className = 'app-card';
 
-    const titleEl = document.createElement('span');
-    titleEl.className = 'job-title';
+    const top = document.createElement('div');
+    top.className = 'app-top';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'app-title';
     titleEl.textContent = app.jobTitle ?? '—';
     titleEl.title = app.jobTitle ?? '';
 
-    const companyEl = document.createElement('span');
-    companyEl.className = 'company';
+    const companyEl = document.createElement('div');
+    companyEl.className = 'app-company';
     companyEl.textContent = app.company ?? '—';
     companyEl.title = app.company ?? '';
 
+    top.appendChild(titleEl);
+    top.appendChild(companyEl);
+
+    const bottom = document.createElement('div');
+    bottom.className = 'app-bottom';
+
     const dateEl = document.createElement('span');
-    dateEl.className = 'applied-date';
+    dateEl.className = 'app-date';
     dateEl.textContent = app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '—';
 
     const select = document.createElement('select');
+    select.className = 'app-select';
     STATUS_OPTIONS.forEach((opt) => {
       const option = document.createElement('option');
       option.value = opt;
@@ -295,11 +329,12 @@ async function loadDashboard(page) {
       });
     });
 
-    row.appendChild(titleEl);
-    row.appendChild(companyEl);
-    row.appendChild(dateEl);
-    row.appendChild(select);
-    listEl.appendChild(row);
+    bottom.appendChild(dateEl);
+    bottom.appendChild(select);
+
+    card.appendChild(top);
+    card.appendChild(bottom);
+    listEl.appendChild(card);
   });
 }
 
@@ -420,6 +455,12 @@ function bindNavigation({ user, tier }) {
       document.getElementById('settings-current-password').value = '';
       document.getElementById('settings-new-password').value = '';
     }
+  });
+
+  // Show selected filename in drop zone
+  document.getElementById('resume-file-input').addEventListener('change', (e) => {
+    const nameEl = document.getElementById('file-selected-name');
+    if (nameEl) nameEl.textContent = e.target.files[0]?.name ?? '';
   });
 
   document.getElementById('btn-upload-resume').addEventListener('click', () => {
