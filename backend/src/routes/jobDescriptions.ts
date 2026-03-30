@@ -72,4 +72,34 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// GET /job-descriptions/by-url?url=... — look up a saved JD by source URL
+router.get('/by-url', requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const url = req.query.url as string | undefined;
+
+  if (!url) {
+    return res.status(400).json({ data: null, error: 'url query param required', status: 400 });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, source_url, platform, extracted_data FROM job_descriptions WHERE user_id = $1 AND source_url = $2',
+      [userId, url]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ data: null, error: 'Not found', status: 404 });
+    }
+
+    const row = result.rows[0];
+    return res.status(200).json({
+      data: { id: row.id, sourceUrl: row.source_url, platform: row.platform, extractedData: row.extracted_data },
+      error: null,
+      status: 200,
+    });
+  } catch {
+    return res.status(500).json({ data: null, error: 'Internal error', status: 500 });
+  }
+});
+
 export default router;

@@ -128,7 +128,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'MARK_AS_APPLIED':
       handleMarkAsApplied(message, sendResponse);
       break;
-    case 'REGISTER':
+    case 'GENERATE_RESUME_LATEX':
+      handleGenerateResumeLatex(message, sendResponse);
+      break;    case 'REGISTER':
       handleRegister(message, sendResponse);
       break;
     case 'LOGIN':
@@ -365,8 +367,31 @@ async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterTe
   }
 }
 
-// ── Auth handlers ────────────────────────────────────────────────────────────
+// ── Resume LaTeX handler ─────────────────────────────────────────────────────
 
+/**
+ * { type: "GENERATE_RESUME_LATEX", jobDescriptionId, resumeId }
+ * → { data: { latexCode, missingKeywords }, error, status }
+ */
+async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendResponse) {
+  try {
+    const { accessToken } = await getStoredTokens();
+    const response = await fetch('http://localhost:3000/generate/resume-latex', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({ jobDescriptionId, resumeId }),
+    });
+    const data = await response.json();
+    sendResponse({ data: data.data, error: data.error, status: response.status });
+  } catch (err) {
+    sendResponse({ data: null, error: err.message, status: 0 });
+  }
+}
+
+// ── Auth handlers ────────────────────────────────────────────────────────────
 const BASE_URL = 'http://localhost:3000';
 
 async function handleRegister({ email, password }, sendResponse) {

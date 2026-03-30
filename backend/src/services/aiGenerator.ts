@@ -85,6 +85,87 @@ export interface AnswerResult {
   answers: Array<{ question: string; answer: string }>;
 }
 
+export interface ResumeLatexResult {
+  latexCode: string;
+  missingKeywords: string[];
+}
+
+/**
+ * Generate an ATS-optimised one-page resume as LaTeX source.
+ * Steps:
+ *   1. Extract missing keywords from the JD vs the resume.
+ *   2. Rewrite bullet points to weave in those keywords naturally.
+ *   3. Return the full LaTeX document string.
+ */
+export async function generateResumeLatex(
+  resume: ParsedResume,
+  jd: JobDescription,
+  missingKeywords: string[]
+): Promise<ResumeLatexResult> {
+  const role    = jd.title   ?? 'the advertised position';
+  const company = jd.company ?? 'the company';
+  const jdBody  = jd.body    ?? '';
+
+  const systemPrompt = `You are an expert resume writer and LaTeX typesetter.
+Your task: produce a COMPLETE, COMPILABLE LaTeX resume document that is:
+- Exactly one page (use geometry margins 0.5in all sides)
+- 100% ATS-friendly (no tables, no columns, no graphics, no special fonts — plain text sections only)
+- Tailored to the specific job below by naturally weaving in the MISSING KEYWORDS listed
+- Showcases ALL work experience, achievements, skills, and education from the candidate data
+
+LaTeX requirements:
+- Use \\documentclass[10pt]{article} with geometry package (0.5in margins)
+- Sections: Summary, Skills, Experience, Education, Certifications (omit empty ones)
+- Each experience bullet must start with a strong action verb and include a quantified achievement where possible
+- Skills section: comma-separated inline list (ATS-safe)
+- No \\includegraphics, no tikz, no fancy fonts
+- End with \\end{document}
+
+Return ONLY the raw LaTeX code. No markdown fences, no explanation.`;
+
+  const userPrompt = `TARGET JOB: ${role} at ${company}
+JOB DESCRIPTION EXCERPT:
+${jdBody.slice(0, 1500)}
+
+MISSING KEYWORDS TO WEAVE IN: ${missingKeywords.join(', ')}
+
+CANDIDATE DATA:
+Name: ${resume.name}
+Email: ${resume.email}
+Phone: ${resume.phone}
+Skills: ${(resume.skills || []).join(', ')}
+Work Experience:
+${(resume.workExperience || [])
+  .map((e) => `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'})\n  ${e.description}`)
+  .join('\n')}
+Education:
+${(resume.education || []).map((e) => `- ${e.degree} from ${e.institution}`).join('\n') || 'Not provided'}
+Certifications: ${(resume.certifications || []).join(', ') || 'None'}
+
+Generate the complete LaTeX resume now.`;
+
+  let completion;
+  try {
+    completion = await getOpenAI().chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt   },
+      ],
+      temperature: 0.4,
+      max_tokens: 2500,
+    });
+  } catch (err) {
+    throw new AIServiceError('OpenAI API call failed', err);
+  }
+
+  const raw = completion.choices[0]?.message?.content?.trim() ?? '';
+  // Strip any accidental markdown fences the model may add
+  const latexCode = raw.replace(/^```(?:latex)?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  return { latexCode, missingKeywords };
+}
+
 /**
  * Generate tailored answers for a list of application questions using OpenAI Chat Completions.
  * Supports motivation, behavioral, and competency question types.

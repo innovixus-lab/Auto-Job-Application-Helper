@@ -698,58 +698,63 @@
         return new WorkdayExtractor();
       case "icims":
         return new ICIMSExtractor();
-      case "generic":
       default:
         return { extract: () => genericExtract(platform) };
     }
   }
-  (function init() {
+  (async function init() {
     try {
-      const url = window.location.href;
-      const detector = new JobDetector();
-      const { detected, platform } = detector.detect(url);
+      const { detected, platform } = new JobDetector().detect(window.location.href);
       if (!detected) return;
-      const extractor = getExtractor(platform);
-      const jobDescription = extractor.extract();
-      if (jobDescription && (jobDescription.title !== null || jobDescription.body !== null)) {
-        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (authState) => {
-          if (!authState || !authState.accessToken) {
-            const missingFields = JDExtractorBase.getMissingFields(jobDescription);
-            const warnings = ["Please log in to save this job and use AI features."];
-            mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
+      const jobDescription = getExtractor(platform).extract();
+      if (!jobDescription || jobDescription.title === null && jobDescription.body === null) return;
+      const authState = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
+          if (chrome.runtime.lastError) {
+            resolve(null);
             return;
           }
-          chrome.runtime.sendMessage({
-            type: "API_REQUEST",
-            endpoint: "http://localhost:3000/job-descriptions",
-            method: "POST",
-            body: {
-              ...jobDescription,
-              // Truncate body to 5000 chars to avoid payload size issues
-              body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null
-            }
-          }, (response) => {
-            if (response?.data?.id) {
-              jobDescription.id = response.data.id;
-            } else {
-              console.warn("[AJAH] Failed to save job description:", response?.error, response?.status);
-            }
-            const missingFields = JDExtractorBase.getMissingFields(jobDescription);
-            const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(", ")}`] : [];
-            mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
-          });
+          resolve(res ?? null);
         });
-      } else {
+      });
+      if (!authState || !authState.accessToken) {
+        mountOverlay({
+          platform,
+          jobDescription,
+          formFiller: new FormFiller(),
+          warnings: ["Please log in to save this job and use AI features."]
+        });
         return;
       }
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          type: "API_REQUEST",
+          endpoint: "http://localhost:3000/job-descriptions",
+          method: "POST",
+          body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null }
+        }, (res) => {
+          if (chrome.runtime.lastError) {
+            resolve({ data: null, error: chrome.runtime.lastError.message });
+            return;
+          }
+          resolve(res ?? { data: null, error: "No response" });
+        });
+      });
+      if (response?.data?.id) jobDescription.id = response.data.id;
+      const missingFields = JDExtractorBase.getMissingFields(jobDescription);
+      const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(", ")}`] : [];
+      mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
     } catch (err) {
       console.error("[content.js] init error:", err);
     }
   })();
   function scoreColor(score) {
-    if (score >= 70) return "#16a34a";
-    if (score >= 40) return "#b45309";
-    return "#b91c1c";
+    if (score >= 70) return "#4ade80";
+    if (score >= 40) return "#fbbf24";
+    return "#f87171";
+  }
+  function escapeHtml(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     if (document.getElementById("ajah-overlay-host")) return;
@@ -757,281 +762,348 @@
     host.id = "ajah-overlay-host";
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: "open" });
+    const GL = `
+    --bg:rgba(255,255,255,0.12);
+    --surface:rgba(255,255,255,0.18);
+    --surface2:rgba(255,255,255,0.10);
+    --border:rgba(255,255,255,0.35);
+    --border2:rgba(255,255,255,0.20);
+    --t:#ffffff;
+    --tm:rgba(255,255,255,0.65);
+    --accent:#818cf8;
+    --accent2:#a78bfa;
+    --blur:blur(20px);
+    --shadow:0 8px 32px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.25);
+    --shadow-sm:0 4px 16px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.15);
+    --panel-bg:rgba(15,15,40,0.72);
+  `;
+    const B = "display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 11px;border-radius:10px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:700;border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:all 0.18s;";
+    const BTN_INDIGO = B + "background:rgba(99,102,241,0.55);color:#fff;box-shadow:0 4px 15px rgba(99,102,241,0.4),inset 0 1px 0 rgba(255,255,255,0.2);";
+    const BTN_TEAL = B + "background:rgba(6,182,212,0.55);color:#fff;box-shadow:0 4px 15px rgba(6,182,212,0.4),inset 0 1px 0 rgba(255,255,255,0.2);";
+    const BTN_GREEN = B + "background:rgba(34,197,94,0.55);color:#fff;box-shadow:0 4px 15px rgba(34,197,94,0.4),inset 0 1px 0 rgba(255,255,255,0.2);";
+    const BTN_AMBER = B + "background:rgba(245,158,11,0.55);color:#fff;box-shadow:0 4px 15px rgba(245,158,11,0.4),inset 0 1px 0 rgba(255,255,255,0.2);";
+    const BTN_RED = B + "background:rgba(239,68,68,0.55);color:#fff;box-shadow:0 4px 15px rgba(239,68,68,0.4),inset 0 1px 0 rgba(255,255,255,0.2);";
+    const DIV_S = "border:none;border-top:1px solid rgba(255,255,255,0.15);margin:10px 0;";
+    const LBL_S = "margin:0 0 6px;font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.7px;";
+    const TA_S = "width:100%;font-size:11px;font-family:inherit;font-weight:500;border:1px solid var(--border2);border-radius:9px;padding:7px 9px;box-sizing:border-box;resize:vertical;background:var(--surface2);color:var(--t);outline:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);";
     const title = jobDescription && jobDescription.title ? escapeHtml(jobDescription.title) : "";
     const company = jobDescription && jobDescription.company ? escapeHtml(jobDescription.company) : "";
     const platformLabel = platform ? escapeHtml(platform.charAt(0).toUpperCase() + platform.slice(1)) : "";
-    const jobSummaryHtml = `
-    <div id="ajah-job-summary" style="margin-bottom:10px;">
-      ${title ? `<p style="margin:0 0 2px;font-weight:700;font-size:14px;color:#111827;">${title}</p>` : ""}
-      ${company ? `<p style="margin:0 0 4px;font-size:13px;color:#374151;">${company}</p>` : ""}
-      ${platformLabel ? `<span style="display:inline-block;padding:2px 8px;background:#e0f2fe;color:#0369a1;border-radius:12px;font-size:11px;font-weight:600;">${platformLabel}</span>` : ""}
-    </div>`;
+    const jobSummaryHtml = `<div style="margin-bottom:12px;">
+    ${title ? `<p style="margin:0 0 2px;font-weight:700;font-size:13px;color:var(--t);">${title}</p>` : ""}
+    ${company ? `<p style="margin:0 0 6px;font-size:11px;font-weight:500;color:var(--tm);">${company}</p>` : ""}
+    ${platformLabel ? `<span style="display:inline-block;padding:3px 10px;background:rgba(129,140,248,0.25);color:#c7d2fe;border-radius:50px;font-size:10px;font-weight:700;border:1px solid rgba(129,140,248,0.4);backdrop-filter:blur(8px);">${platformLabel}</span>` : ""}
+  </div>`;
     const matchScore = jobDescription && jobDescription._matchScore != null ? jobDescription._matchScore : null;
+    const matchColor = matchScore !== null ? scoreColor(matchScore) : "var(--tm)";
     const matchScoreHtml = matchScore !== null ? `
-    <div id="ajah-match-score" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-      <span style="font-size:12px;color:#6b7280;font-weight:600;">Match Score</span>
-      <span style="font-size:20px;font-weight:700;color:${scoreColor(matchScore)};">${matchScore}%</span>
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:8px 12px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);">
+      <span style="font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.5px;">Match Score</span>
+      <span style="font-size:20px;font-weight:800;color:${matchColor};">${matchScore}%</span>
     </div>` : "";
     const missingKeywords = jobDescription && Array.isArray(jobDescription._missingKeywords) && jobDescription._missingKeywords.length > 0 ? jobDescription._missingKeywords : null;
     const missingKeywordsHtml = missingKeywords ? `
-    <div id="ajah-missing-keywords" style="margin-bottom:10px;">
-      <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#6b7280;">Missing Keywords</p>
+    <div style="margin-bottom:12px;">
+      <p style="${LBL_S}">Missing Keywords</p>
       <div style="display:flex;flex-wrap:wrap;gap:4px;">
-        ${missingKeywords.map((kw) => `<span style="padding:2px 7px;background:#fef3c7;color:#92400e;border-radius:10px;font-size:11px;">${escapeHtml(kw)}</span>`).join("")}
+        ${missingKeywords.map((kw) => `<span style="padding:2px 8px;background:rgba(251,191,36,0.2);color:#fde68a;border-radius:50px;font-size:10px;font-weight:700;border:1px solid rgba(251,191,36,0.35);">${escapeHtml(kw)}</span>`).join("")}
       </div>
     </div>` : "";
-    const warningHtml = warnings.length > 0 ? `<p style="color:#b45309;margin:0 0 8px;font-size:12px;">\u26A0 ${warnings.map(escapeHtml).join(" | ")}</p>` : "";
+    const warningHtml = warnings.length > 0 ? `<div style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:8px 11px;margin-bottom:12px;font-size:11px;font-weight:600;color:#fde68a;backdrop-filter:blur(8px);">\u26A0 ${warnings.map(escapeHtml).join(" | ")}</div>` : "";
     shadow.innerHTML = `
-  <div id="ajah-panel" style="all:initial;position:fixed;top:16px;right:16px;background:#fff;padding:12px 14px;border:1px solid #d1d5db;z-index:2147483647;font-family:sans-serif;font-size:13px;width:min(320px, 90vw);box-shadow:0 4px 12px rgba(0,0,0,.15);border-radius:8px;max-height:min(90vh, 600px);overflow-y:auto;box-sizing:border-box;">
-
-    <!-- Header row -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <p style="margin:0;font-weight:700;font-size:13px;color:#111827;">Auto Job Application Helper</p>
-      <button id="ajah-dismiss-btn" title="Dismiss" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#6b7280;padding:0 2px;">\xD7</button>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    #p { ${GL} }
+    #p {
+      all:initial; position:fixed; top:16px; right:16px;
+      background:var(--panel-bg);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      border:1px solid var(--border);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      padding:15px;
+      z-index:2147483647;
+      font-family:'Inter',sans-serif; font-size:12px; color:var(--t);
+      width:min(315px,90vw); max-height:min(90vh,590px);
+      overflow-y:auto; box-sizing:border-box;
+    }
+    #p * { box-sizing:border-box; font-family:'Inter',sans-serif; }
+    #p button:hover  { filter:brightness(1.15); transform:translateY(-1px); }
+    #p button:active { filter:brightness(0.9);  transform:translateY(1px); }
+    #p button:disabled { opacity:0.4; cursor:default; transform:none; filter:none; }
+    #p textarea:focus { border-color:rgba(129,140,248,0.7)!important; box-shadow:0 0 0 3px rgba(129,140,248,0.2)!important; outline:none; }
+    ::-webkit-scrollbar { width:4px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:10px; }
+    .ag { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
+    .ag .full { grid-column:span 2; }
+    .glass-card {
+      background:var(--surface2);
+      border:1px solid var(--border2);
+      border-radius:12px;
+      padding:10px 12px;
+      backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);
+      box-shadow:var(--shadow-sm);
+    }
+  </style>
+  <div id="p">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,rgba(99,102,241,0.7),rgba(167,139,250,0.7));border:1px solid rgba(255,255,255,0.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;backdrop-filter:blur(8px);box-shadow:0 4px 12px rgba(99,102,241,0.4);">\u{1F680}</div>
+        <div>
+          <p style="margin:0;font-weight:800;font-size:12px;color:var(--t);line-height:1.2;">Job Helper</p>
+          <p style="margin:0;font-size:10px;font-weight:500;color:var(--tm);">Auto Application Assistant</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;">
+        <button id="ajah-theme-btn" title="Toggle theme" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;padding:4px 7px;color:var(--t);backdrop-filter:blur(8px);">\u{1F319}</button>
+        <button id="ajah-dismiss-btn" title="Dismiss" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:14px;padding:4px 8px;color:var(--tm);font-weight:700;backdrop-filter:blur(8px);">\xD7</button>
+      </div>
     </div>
-
-    ${warningHtml}
-    ${jobSummaryHtml}
-    ${matchScoreHtml}
-    ${missingKeywordsHtml}
-
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0;">
-
-    <!-- Action buttons section -->
-    <div id="ajah-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-      <button id="ajah-autofill-btn"  style="padding:6px 11px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Autofill</button>
-      <button id="ajah-gen-btn"       style="padding:6px 11px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Generate Cover Letter</button>
-      <button id="ajah-answers-btn"   style="padding:6px 11px;background:#7c3aed;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Generate Answers</button>
-      <button id="ajah-applied-btn"   style="padding:6px 11px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Mark as Applied</button>
+    ${warningHtml}${jobSummaryHtml}${matchScoreHtml}${missingKeywordsHtml}
+    <hr style="${DIV_S}">
+    <div class="ag">
+      <button id="ajah-autofill-btn" style="${BTN_TEAL}">\u26A1 Autofill</button>
+      <button id="ajah-gen-btn"      style="${BTN_INDIGO}">\u2709\uFE0F Cover Letter</button>
+      <button id="ajah-answers-btn"  style="${BTN_AMBER}">\u{1F4A1} Gen Answers</button>
+      <button id="ajah-applied-btn"  style="${BTN_GREEN}">\u2713 Mark Applied</button>
+      <button id="ajah-resume-btn" class="full" style="${BTN_INDIGO}width:100%;justify-content:center;">\u{1F4C4} Generate ATS Resume (LaTeX)</button>
     </div>
-
-    <!-- Autofill output -->
-    <div id="ajah-autofill-output" style="font-size:12px;color:#374151;margin-bottom:4px;"></div>
-
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0;">
-
-    <!-- Cover letter section -->
-    <div id="ajah-cover-letter-section">
-      <div id="ajah-cl-output" style="margin-top:4px;"></div>
-    </div>
-
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0;">
-
-    <!-- Answers section -->
-    <div id="ajah-answers-section">
-      <p style="margin:0 0 6px;font-weight:600;font-size:12px;color:#374151;">Answer Questions</p>
-      <textarea id="ajah-questions-input" placeholder="Enter questions, one per line\u2026" style="width:100%;height:72px;font-size:12px;font-family:sans-serif;border:1px solid #d1d5db;border-radius:4px;padding:6px;box-sizing:border-box;resize:vertical;"></textarea>
-      <div id="ajah-answers-output" style="margin-top:6px;"></div>
-    </div>
-
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0;">
-
-    <!-- Mark as applied output -->
-    <div id="ajah-applied-output" style="font-size:12px;color:#374151;"></div>
-
+    <div id="ajah-autofill-output" style="font-size:11px;font-weight:500;color:var(--tm);margin-bottom:4px;"></div>
+    <hr style="${DIV_S}">
+    <div id="ajah-cl-output"></div>
+    <hr style="${DIV_S}">
+    <p style="${LBL_S}">Answer Questions</p>
+    <textarea id="ajah-questions-input" placeholder="Enter questions, one per line\u2026" style="${TA_S}height:68px;"></textarea>
+    <div id="ajah-answers-output" style="margin-top:8px;"></div>
+    <hr style="${DIV_S}">
+    <div id="ajah-resume-output"></div>
+    <hr style="${DIV_S}">
+    <div id="ajah-applied-output" style="font-size:11px;font-weight:500;color:var(--tm);"></div>
   </div>`;
+    const panel = shadow.getElementById("p");
     shadow.getElementById("ajah-dismiss-btn").addEventListener("click", () => {
       overlayDismissed = true;
-      shadow.getElementById("ajah-panel").style.display = "none";
+      panel.style.display = "none";
       mountReopenButton();
     });
+    const themeBtn = shadow.getElementById("ajah-theme-btn");
+    const applyOverlayTheme = (dark) => {
+      if (dark) {
+        panel.style.setProperty("--panel-bg", "rgba(8,8,25,0.82)");
+        themeBtn.textContent = "\u2600\uFE0F";
+      } else {
+        panel.style.setProperty("--panel-bg", "rgba(15,15,40,0.72)");
+        themeBtn.textContent = "\u{1F319}";
+      }
+    };
+    const savedTheme = localStorage.getItem("ajah-overlay-theme") || "dark";
+    applyOverlayTheme(savedTheme === "light");
+    themeBtn.addEventListener("click", () => {
+      const cur = localStorage.getItem("ajah-overlay-theme") || "dark";
+      const next = cur === "dark" ? "light" : "dark";
+      localStorage.setItem("ajah-overlay-theme", next);
+      applyOverlayTheme(next === "light");
+    });
     const autofillBtn = shadow.getElementById("ajah-autofill-btn");
-    const autofillOutput = shadow.getElementById("ajah-autofill-output");
+    const autofillOut = shadow.getElementById("ajah-autofill-output");
     autofillBtn.addEventListener("click", () => {
       autofillBtn.disabled = true;
       autofillBtn.textContent = "Filling\u2026";
-      autofillOutput.textContent = "";
-      chrome.runtime.sendMessage(
-        { type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" },
-        (response) => {
-          autofillBtn.disabled = false;
-          autofillBtn.textContent = "Autofill";
-          if (!response || !response.data) {
-            autofillOutput.innerHTML = '<span style="color:#b91c1c;">Could not load resume data.</span>';
-            return;
-          }
-          const resumeData = response.data;
-          const scanned = formFiller.scan(document);
-          const mapped = formFiller.mapFields(scanned);
-          const { filled, manualReview } = formFiller.fill(mapped, resumeData);
-          autofillOutput.textContent = `Autofill complete: ${filled} fields filled, ${manualReview} fields need review`;
+      autofillOut.textContent = "";
+      chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => {
+        autofillBtn.disabled = false;
+        autofillBtn.textContent = "Autofill";
+        if (!res || !res.data) {
+          autofillOut.innerHTML = '<span style="color:#f87171;font-weight:700;">Could not load resume data.</span>';
+          return;
         }
-      );
+        const { filled, manualReview } = formFiller.fill(formFiller.mapFields(formFiller.scan(document)), res.data);
+        autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${filled} filled</span><span style="color:var(--tm);"> \xB7 ${manualReview} need review</span>`;
+      });
     });
     const genBtn = shadow.getElementById("ajah-gen-btn");
-    const clOutput = shadow.getElementById("ajah-cl-output");
+    const clOut = shadow.getElementById("ajah-cl-output");
     genBtn.addEventListener("click", async () => {
-      const jobDescriptionId = jobDescription && jobDescription.id;
-      if (!jobDescriptionId) {
-        clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
+      const jdId = jobDescription && jobDescription.id;
+      if (!jdId) {
+        clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>';
         return;
       }
       genBtn.disabled = true;
       genBtn.textContent = "Generating\u2026";
-      clOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait\u2026</p>';
-      const resumeRes = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" },
-          (res) => resolve(res ?? { data: null, error: "No response" })
-        );
-      });
-      if (!resumeRes.data || !resumeRes.data.id) {
+      clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
+      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
+      if (!rRes.data?.id) {
         genBtn.disabled = false;
-        genBtn.textContent = "Generate Cover Letter";
-        clOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
+        genBtn.textContent = "Cover Letter";
+        clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
         return;
       }
-      const resumeId = resumeRes.data.id;
-      chrome.runtime.sendMessage(
-        { type: "GENERATE_COVER_LETTER", jobDescriptionId, resumeId },
-        (response) => {
-          genBtn.disabled = false;
-          genBtn.textContent = "Generate Cover Letter";
-          if (response && response.data && response.data.coverLetterText) {
-            clOutput.innerHTML = `
-            <textarea id="ajah-cl-text" style="width:100%;height:180px;font-size:12px;font-family:sans-serif;border:1px solid #ccc;border-radius:4px;padding:6px;box-sizing:border-box;resize:vertical;">${escapeHtml(response.data.coverLetterText)}</textarea>
-            <button id="ajah-copy-btn" style="margin-top:6px;padding:5px 10px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Copy</button>
-          `;
-            shadow.getElementById("ajah-copy-btn").addEventListener("click", () => {
-              const text = shadow.getElementById("ajah-cl-text").value;
-              navigator.clipboard.writeText(text).then(() => {
-                const copyBtn = shadow.getElementById("ajah-copy-btn");
-                copyBtn.textContent = "Copied!";
+      chrome.runtime.sendMessage({ type: "GENERATE_COVER_LETTER", jobDescriptionId: jdId, resumeId: rRes.data.id }, (res) => {
+        genBtn.disabled = false;
+        genBtn.textContent = "Cover Letter";
+        if (res?.data?.coverLetterText) {
+          clOut.innerHTML = `<textarea id="ajah-cl-text" style="${TA_S}height:180px;">${escapeHtml(res.data.coverLetterText)}</textarea>
+          <button id="ajah-copy-btn" style="${BTN_GREEN}margin-top:8px;">Copy</button>`;
+          shadow.getElementById("ajah-copy-btn").addEventListener("click", () => {
+            navigator.clipboard.writeText(shadow.getElementById("ajah-cl-text").value).then(() => {
+              const b = shadow.getElementById("ajah-copy-btn");
+              b.textContent = "Copied!";
+              setTimeout(() => {
+                b.textContent = "Copy";
+              }, 2e3);
+            });
+          });
+        } else if (res?.status === 402) {
+          clOut.innerHTML = `<div class="glass-card" style="margin-bottom:8px;color:#fde68a;font-size:11px;font-weight:600;">Cover letter limit reached</div>
+          <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
+        } else {
+          clOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0 0 7px;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>
+          <button id="ajah-retry-btn" style="${BTN_RED}">Retry</button>`;
+          shadow.getElementById("ajah-retry-btn").addEventListener("click", () => genBtn.click());
+        }
+      });
+    });
+    const answersBtn = shadow.getElementById("ajah-answers-btn");
+    const answersOut = shadow.getElementById("ajah-answers-output");
+    const questionsIn = shadow.getElementById("ajah-questions-input");
+    answersBtn.addEventListener("click", async () => {
+      const jdId = jobDescription && jobDescription.id;
+      if (!jdId) {
+        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>';
+        return;
+      }
+      const raw = questionsIn.value.trim();
+      if (!raw) {
+        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Enter at least one question.</p>';
+        return;
+      }
+      const questions = raw.split("\n").map((q) => q.trim()).filter(Boolean);
+      answersBtn.disabled = true;
+      answersBtn.textContent = "Generating\u2026";
+      answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
+      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
+      if (!rRes.data?.id) {
+        answersBtn.disabled = false;
+        answersBtn.textContent = "Gen Answers";
+        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "GENERATE_ANSWERS", jobDescriptionId: jdId, resumeId: rRes.data.id, questions }, (res) => {
+        answersBtn.disabled = false;
+        answersBtn.textContent = "Gen Answers";
+        if (res?.data?.answers) {
+          answersOut.innerHTML = res.data.answers.map((item, idx) => `
+          <div class="glass-card" style="margin-bottom:8px;">
+            <p style="margin:0 0 5px;font-weight:700;font-size:11px;color:var(--t);">${escapeHtml(item.question)}</p>
+            <textarea id="ajah-ans-${idx}" style="${TA_S}height:72px;">${escapeHtml(item.answer)}</textarea>
+            <button data-idx="${idx}" class="ans-copy" style="${BTN_GREEN}margin-top:5px;padding:5px 12px;font-size:10px;">Copy</button>
+          </div>`).join("");
+          answersOut.querySelectorAll(".ans-copy").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const ta = shadow.getElementById(`ajah-ans-${btn.dataset.idx}`);
+              navigator.clipboard.writeText(ta.value).then(() => {
+                btn.textContent = "Copied!";
                 setTimeout(() => {
-                  copyBtn.textContent = "Copy";
+                  btn.textContent = "Copy";
                 }, 2e3);
               });
             });
-          } else if (response && response.status === 402) {
-            clOutput.innerHTML = `
-            <p style="color:#b45309;margin:0 0 6px;">Cover letter limit reached (0 remaining this month)</p>
-            <a href="https://autojobhelper.com/upgrade" target="_blank" style="display:inline-block;padding:5px 10px;background:#7c3aed;color:#fff;border-radius:4px;text-decoration:none;font-size:12px;">Upgrade to Premium</a>
-          `;
-          } else {
-            const errMsg = response && response.error ? response.error : "Unknown error";
-            clOutput.innerHTML = `
-            <p style="color:#b91c1c;margin:0 0 6px;">Error: ${escapeHtml(errMsg)}</p>
-            <button id="ajah-retry-btn" style="padding:5px 10px;background:#dc2626;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Retry</button>
-          `;
-            shadow.getElementById("ajah-retry-btn").addEventListener("click", () => {
-              genBtn.click();
-            });
-          }
+          });
+        } else if (res?.status === 402) {
+          answersOut.innerHTML = `<div class="glass-card" style="margin-bottom:8px;color:#fde68a;font-size:11px;font-weight:600;">Answer limit reached</div>
+          <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
+        } else {
+          answersOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0 0 7px;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>
+          <button id="ajah-ans-retry" style="${BTN_RED}">Retry</button>`;
+          shadow.getElementById("ajah-ans-retry").addEventListener("click", () => answersBtn.click());
         }
-      );
-    });
-    const answersBtn = shadow.getElementById("ajah-answers-btn");
-    const answersOutput = shadow.getElementById("ajah-answers-output");
-    const questionsInput = shadow.getElementById("ajah-questions-input");
-    answersBtn.addEventListener("click", async () => {
-      const jobDescriptionId = jobDescription && jobDescription.id;
-      if (!jobDescriptionId) {
-        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
-        return;
-      }
-      const rawQuestions = questionsInput.value.trim();
-      if (!rawQuestions) {
-        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Please enter at least one question.</p>';
-        return;
-      }
-      const questions = rawQuestions.split("\n").map((q) => q.trim()).filter((q) => q.length > 0);
-      answersBtn.disabled = true;
-      answersBtn.textContent = "Generating\u2026";
-      answersOutput.innerHTML = '<p style="color:#555;margin:0;">Please wait\u2026</p>';
-      const resumeRes = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" },
-          (res) => resolve(res ?? { data: null, error: "No response" })
-        );
       });
-      if (!resumeRes.data || !resumeRes.data.id) {
-        answersBtn.disabled = false;
-        answersBtn.textContent = "Generate Answers";
-        answersOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">No resume found. Please upload your resume first.</p>';
-        return;
-      }
-      const resumeId = resumeRes.data.id;
-      chrome.runtime.sendMessage(
-        { type: "GENERATE_ANSWERS", jobDescriptionId, resumeId, questions },
-        (response) => {
-          answersBtn.disabled = false;
-          answersBtn.textContent = "Generate Answers";
-          if (response && response.data && Array.isArray(response.data.answers)) {
-            const answersHtml = response.data.answers.map((item, idx) => `
-            <div style="margin-bottom:12px;">
-              <p style="margin:0 0 4px;font-weight:600;font-size:12px;">${escapeHtml(item.question)}</p>
-              <textarea id="ajah-answer-text-${idx}" style="width:100%;height:80px;font-size:12px;font-family:sans-serif;border:1px solid #ccc;border-radius:4px;padding:6px;box-sizing:border-box;resize:vertical;">${escapeHtml(item.answer)}</textarea>
-              <button data-answer-idx="${idx}" class="ajah-answer-copy-btn" style="margin-top:4px;padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Copy</button>
-            </div>
-          `).join("");
-            answersOutput.innerHTML = answersHtml;
-            answersOutput.querySelectorAll(".ajah-answer-copy-btn").forEach((btn) => {
-              btn.addEventListener("click", () => {
-                const idx = btn.getAttribute("data-answer-idx");
-                const textarea = shadow.getElementById(`ajah-answer-text-${idx}`);
-                navigator.clipboard.writeText(textarea.value).then(() => {
-                  btn.textContent = "Copied!";
-                  setTimeout(() => {
-                    btn.textContent = "Copy";
-                  }, 2e3);
-                });
-              });
-            });
-          } else if (response && response.status === 402) {
-            answersOutput.innerHTML = `
-            <p style="color:#b45309;margin:0 0 6px;">Answer limit reached (0 remaining this month)</p>
-            <a href="https://autojobhelper.com/upgrade" target="_blank" style="display:inline-block;padding:5px 10px;background:#7c3aed;color:#fff;border-radius:4px;text-decoration:none;font-size:12px;">Upgrade to Premium</a>
-          `;
-          } else {
-            const errMsg = response && response.error ? response.error : "Unknown error";
-            answersOutput.innerHTML = `
-            <p style="color:#b91c1c;margin:0 0 6px;">Error: ${escapeHtml(errMsg)}</p>
-            <button id="ajah-answers-retry-btn" style="padding:5px 10px;background:#dc2626;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Retry</button>
-          `;
-            shadow.getElementById("ajah-answers-retry-btn").addEventListener("click", () => {
-              answersBtn.click();
-            });
-          }
-        }
-      );
     });
     const appliedBtn = shadow.getElementById("ajah-applied-btn");
-    const appliedOutput = shadow.getElementById("ajah-applied-output");
+    const appliedOut = shadow.getElementById("ajah-applied-output");
     appliedBtn.addEventListener("click", () => {
-      const jobDescriptionId = jobDescription && jobDescription.id;
-      if (!jobDescriptionId) {
-        appliedOutput.innerHTML = '<p style="color:#b91c1c;margin:0;">Not logged in or job not saved yet. Please log in via the extension popup and refresh this page.</p>';
+      const jdId = jobDescription && jobDescription.id;
+      if (!jdId) {
+        appliedOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>';
         return;
       }
       appliedBtn.disabled = true;
       appliedBtn.textContent = "Saving\u2026";
-      appliedOutput.textContent = "";
-      const matchScore2 = jobDescription && jobDescription._matchScore != null ? jobDescription._matchScore : null;
-      chrome.runtime.sendMessage(
-        { type: "MARK_AS_APPLIED", jobDescriptionId, matchScore: matchScore2 },
-        (response) => {
-          if (response && response.status === 201) {
-            appliedBtn.textContent = "\u2713 Marked as Applied";
-            appliedBtn.style.background = "#6b7280";
-          } else if (response && response.status === 409) {
-            appliedBtn.disabled = false;
-            appliedBtn.textContent = "Mark as Applied";
-            appliedOutput.innerHTML = '<p style="color:#b45309;margin:0;">Already tracked. View in Dashboard.</p>';
-          } else if (response && response.status === 402) {
-            appliedBtn.disabled = false;
-            appliedBtn.textContent = "Mark as Applied";
-            appliedOutput.innerHTML = `
-            <p style="color:#b45309;margin:0 0 6px;">Application limit reached (25 max on free tier)</p>
-            <a href="https://autojobhelper.com/upgrade" target="_blank" style="display:inline-block;padding:5px 10px;background:#7c3aed;color:#fff;border-radius:4px;text-decoration:none;font-size:12px;">Upgrade to Premium</a>
-          `;
-          } else {
-            appliedBtn.disabled = false;
-            appliedBtn.textContent = "Mark as Applied";
-            const errMsg = response && response.error ? response.error : "Unknown error";
-            appliedOutput.innerHTML = `<p style="color:#b91c1c;margin:0;">Error: ${escapeHtml(errMsg)}</p>`;
-          }
+      appliedOut.textContent = "";
+      chrome.runtime.sendMessage({ type: "MARK_AS_APPLIED", jobDescriptionId: jdId, matchScore: jobDescription._matchScore ?? null }, (res) => {
+        if (res?.status === 201) {
+          appliedBtn.textContent = "\u2713 Applied";
+          appliedBtn.style.background = "rgba(107,114,128,0.5)";
+          appliedBtn.style.boxShadow = "none";
+        } else if (res?.status === 409) {
+          appliedBtn.disabled = false;
+          appliedBtn.textContent = "\u2713 Mark Applied";
+          appliedOut.innerHTML = '<div class="glass-card" style="color:#fde68a;font-size:11px;font-weight:600;">Already tracked. View in Dashboard.</div>';
+        } else if (res?.status === 402) {
+          appliedBtn.disabled = false;
+          appliedBtn.textContent = "\u2713 Mark Applied";
+          appliedOut.innerHTML = `<div class="glass-card" style="color:#fde68a;font-size:11px;font-weight:600;margin-bottom:8px;">Application limit reached</div>
+          <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
+        } else {
+          appliedBtn.disabled = false;
+          appliedBtn.textContent = "\u2713 Mark Applied";
+          appliedOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>`;
         }
-      );
+      });
+    });
+    const resumeBtn = shadow.getElementById("ajah-resume-btn");
+    const resumeOut = shadow.getElementById("ajah-resume-output");
+    resumeBtn.addEventListener("click", async () => {
+      const jdId = jobDescription && jobDescription.id;
+      if (!jdId) {
+        resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>';
+        return;
+      }
+      resumeBtn.disabled = true;
+      resumeBtn.textContent = "\u23F3 Generating\u2026";
+      resumeOut.innerHTML = '<p style="color:var(--tm);font-size:11px;margin:0;">Analysing job and building your ATS resume\u2026</p>';
+      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
+      if (!rRes.data?.id) {
+        resumeBtn.disabled = false;
+        resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
+        resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "GENERATE_RESUME_LATEX", jobDescriptionId: jdId, resumeId: rRes.data.id }, (res) => {
+        resumeBtn.disabled = false;
+        resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
+        if (res?.data?.latexCode) {
+          const kws = res.data.missingKeywords || [];
+          const kwHtml = kws.length ? `<div style="margin-bottom:8px;"><p style="${LBL_S}">Keywords woven in</p><div style="display:flex;flex-wrap:wrap;gap:3px;">${kws.map((k) => `<span style="padding:2px 8px;background:rgba(74,222,128,0.2);color:#86efac;border-radius:50px;font-size:10px;font-weight:700;border:1px solid rgba(74,222,128,0.35);">${escapeHtml(k)}</span>`).join("")}</div></div>` : "";
+          resumeOut.innerHTML = `${kwHtml}
+          <p style="${LBL_S}">LaTeX \u2014 paste into <a href="https://overleaf.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:700;">Overleaf</a></p>
+          <textarea id="ajah-latex-ta" readonly style="${TA_S}height:200px;font-family:'Courier New',monospace;font-size:10px;font-weight:400;line-height:1.4;">${escapeHtml(res.data.latexCode)}</textarea>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button id="ajah-latex-copy" style="${BTN_INDIGO}flex:1;justify-content:center;">Copy LaTeX</button>
+            <a href="https://www.overleaf.com/project" target="_blank" style="${BTN_GREEN}flex:1;justify-content:center;text-decoration:none;display:inline-flex;">Open Overleaf \u2197</a>
+          </div>`;
+          shadow.getElementById("ajah-latex-copy").addEventListener("click", () => {
+            navigator.clipboard.writeText(shadow.getElementById("ajah-latex-ta").value).then(() => {
+              const b = shadow.getElementById("ajah-latex-copy");
+              b.textContent = "Copied!";
+              setTimeout(() => {
+                b.textContent = "Copy LaTeX";
+              }, 2e3);
+            });
+          });
+        } else if (res?.status === 402) {
+          resumeOut.innerHTML = `<div class="glass-card" style="color:#fde68a;font-size:11px;font-weight:600;margin-bottom:8px;">Limit reached. Upgrade for unlimited resumes.</div>
+          <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
+        } else {
+          resumeOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0 0 6px;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>
+          <button id="ajah-resume-retry" style="${BTN_RED}">Retry</button>`;
+          shadow.getElementById("ajah-resume-retry").addEventListener("click", () => resumeBtn.click());
+        }
+      });
     });
   }
   function mountReopenButton() {
@@ -1041,22 +1113,28 @@
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
-    <button id="ajah-reopen-btn" style="all:initial;position:fixed;bottom:16px;right:16px;background:#2563eb;color:#fff;border:none;border-radius:20px;padding:6px 12px;font-size:12px;font-family:sans-serif;cursor:pointer;z-index:2147483646;box-shadow:0 2px 8px rgba(0,0,0,.2);">\u2191 Job Helper</button>
-  `;
-    shadow.getElementById("ajah-reopen-btn").addEventListener("click", () => {
-      reopenOverlay();
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;800&display=swap');
+      #rb { transition:all 0.18s; }
+      #rb:hover  { filter:brightness(1.15); transform:translateY(-2px); }
+      #rb:active { filter:brightness(0.9);  transform:translateY(1px); }
+    </style>
+    <button id="rb" style="all:initial;position:fixed;bottom:16px;right:16px;
+      background:rgba(99,102,241,0.6);
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:50px;
+      padding:8px 16px;font-size:11px;font-family:'Inter',sans-serif;font-weight:800;
+      cursor:pointer;z-index:2147483646;
+      box-shadow:0 4px 20px rgba(99,102,241,0.5),inset 0 1px 0 rgba(255,255,255,0.2);
+      display:flex;align-items:center;gap:6px;">\u{1F680} Job Helper</button>`;
+    shadow.getElementById("rb").addEventListener("click", () => {
+      overlayDismissed = false;
+      const h = document.getElementById("ajah-overlay-host");
+      if (h && h.shadowRoot) {
+        const p = h.shadowRoot.getElementById("p");
+        if (p) p.style.display = "block";
+      }
       host.remove();
     });
-  }
-  function reopenOverlay() {
-    overlayDismissed = false;
-    const host = document.getElementById("ajah-overlay-host");
-    if (host && host.shadowRoot) {
-      const panel = host.shadowRoot.getElementById("ajah-panel");
-      if (panel) panel.style.display = "block";
-    }
-  }
-  function escapeHtml(str) {
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 })();

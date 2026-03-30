@@ -1,466 +1,221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Auto Job Application Helper</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    /* ── Theme tokens ── */
-    :root {
-      --accent: #6366f1;
-      --accent-2: #8b5cf6;
-      --accent-glow: rgba(99,102,241,0.35);
-
-      /* light */
-      --bg: rgba(255,255,255,0.55);
-      --bg-solid: #f1f5ff;
-      --surface: rgba(255,255,255,0.45);
-      --surface-border: rgba(255,255,255,0.7);
-      --surface-hover: rgba(255,255,255,0.65);
-      --text: #0f0f1a;
-      --text-muted: #6b7280;
-      --input-bg: rgba(255,255,255,0.5);
-      --input-border: rgba(99,102,241,0.25);
-      --divider: rgba(99,102,241,0.12);
-      --badge-bg: rgba(99,102,241,0.1);
-      --badge-text: #4f46e5;
-      --blur: blur(18px);
-      --shadow: 0 8px 32px rgba(99,102,241,0.15), 0 1px 0 rgba(255,255,255,0.8) inset;
-      --shadow-sm: 0 4px 16px rgba(99,102,241,0.1);
-      --btn-text: #fff;
+    /* ── Glassmorphism tokens ── */
+    :root{
+      --bg-grad:linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#1e3a5f 100%);
+      --glass:rgba(255,255,255,0.10);
+      --glass2:rgba(255,255,255,0.06);
+      --border:rgba(255,255,255,0.20);
+      --border2:rgba(255,255,255,0.12);
+      --t:#ffffff;
+      --tm:rgba(255,255,255,0.60);
+      --accent:#818cf8;
+      --accent2:#a78bfa;
+      --blur:blur(18px);
+      --shadow:0 8px 32px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.15);
+      --shadow-sm:0 4px 16px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.10);
     }
 
-    [data-theme="dark"] {
-      --bg: rgba(10,10,20,0.75);
-      --bg-solid: #0d0d1f;
-      --surface: rgba(255,255,255,0.06);
-      --surface-border: rgba(255,255,255,0.1);
-      --surface-hover: rgba(255,255,255,0.1);
-      --text: #f0f0ff;
-      --text-muted: #9ca3af;
-      --input-bg: rgba(255,255,255,0.07);
-      --input-border: rgba(99,102,241,0.3);
-      --divider: rgba(255,255,255,0.08);
-      --badge-bg: rgba(99,102,241,0.2);
-      --badge-text: #a5b4fc;
-      --shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.05) inset;
-      --shadow-sm: 0 4px 16px rgba(0,0,0,0.4);
+    body{
+      width:340px; min-height:220px;
+      font-family:'Inter',sans-serif; font-size:13px;
+      color:var(--t);
+      background:var(--bg-grad);
+      padding:16px; overflow-x:hidden;
     }
 
-    body {
-      width: 340px;
-      min-height: 220px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      color: var(--text);
-      background: var(--bg-solid);
-      padding: 14px;
-      overflow-x: hidden;
-      transition: background 0.3s, color 0.3s;
+    /* ── Glass card ── */
+    .glass{
+      background:var(--glass);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      padding:15px;
     }
-
-    /* ── Glass surface ── */
-    .glass {
-      background: var(--surface);
-      backdrop-filter: var(--blur);
-      -webkit-backdrop-filter: var(--blur);
-      border: 1px solid var(--surface-border);
-      border-radius: 16px;
-      box-shadow: var(--shadow);
+    .glass2{
+      background:var(--glass2);
+      backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+      border:1px solid var(--border2);
+      border-radius:12px;
+      box-shadow:var(--shadow-sm);
     }
 
     /* ── Header ── */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+    .header-left{display:flex;align-items:center;gap:10px;}
+    .logo-chip{
+      width:38px;height:38px;
+      background:linear-gradient(135deg,rgba(99,102,241,0.7),rgba(167,139,250,0.7));
+      border:1px solid rgba(255,255,255,0.3);border-radius:12px;
+      display:flex;align-items:center;justify-content:center;font-size:18px;
+      backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(99,102,241,0.5);flex-shrink:0;
     }
-    .header-left { display: flex; align-items: center; gap: 10px; }
-    .header-icon {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 17px;
-      box-shadow: 0 4px 14px var(--accent-glow);
-      flex-shrink: 0;
-    }
-    .header-title { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
-    .header-sub   { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+    .header-title{font-size:15px;font-weight:800;color:var(--t);line-height:1.2;}
+    .header-sub{font-size:10px;font-weight:500;color:var(--tm);}
 
     /* ── Theme toggle ── */
-    .theme-toggle {
-      width: 32px; height: 32px;
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px;
-      backdrop-filter: var(--blur);
-      transition: background 0.2s;
-      flex-shrink: 0;
+    .theme-btn{
+      width:34px;height:34px;
+      background:var(--glass2);border:1px solid var(--border2);border-radius:9px;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;
+      backdrop-filter:var(--blur);transition:all 0.18s;flex-shrink:0;
     }
-    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-btn:hover{background:var(--glass);filter:brightness(1.1);}
 
     /* ── Inputs ── */
-    .glass-input {
-      width: 100%;
-      padding: 9px 12px;
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: 10px;
-      backdrop-filter: var(--blur);
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+    .gi{
+      width:100%;padding:9px 12px;
+      background:var(--glass2);border:1px solid var(--border2);border-radius:10px;
+      backdrop-filter:var(--blur);font-family:'Inter',sans-serif;
+      font-size:12px;font-weight:500;color:var(--t);outline:none;
+      transition:border-color 0.2s,box-shadow 0.2s;
     }
-    .glass-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-    .glass-input[readonly] { opacity: 0.7; cursor: default; }
-    .glass-input::placeholder { color: var(--text-muted); }
+    .gi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(129,140,248,0.25);}
+    .gi[readonly]{opacity:0.6;cursor:default;}
+    .gi::placeholder{color:var(--tm);}
 
     /* ── Buttons ── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 9px 14px;
-      border: none;
-      border-radius: 10px;
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:6px;
+      padding:9px 14px;border:1px solid rgba(255,255,255,0.2);border-radius:10px;
+      font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+      cursor:pointer;width:100%;backdrop-filter:var(--blur);
+      transition:all 0.18s;
     }
-    .btn:hover  { opacity: 0.88; }
-    .btn:active { transform: scale(0.97); }
+    .btn:hover{filter:brightness(1.12);transform:translateY(-1px);}
+    .btn:active{filter:brightness(0.9);transform:translateY(1px);}
 
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #fff;
-      box-shadow: 0 4px 16px var(--accent-glow);
-    }
-    .btn-danger {
-      background: linear-gradient(135deg, #ef4444, #f87171);
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(239,68,68,0.3);
-    }
-    .btn-upgrade {
-      background: linear-gradient(135deg, #f59e0b, #fbbf24);
-      color: #1a0a00;
-      box-shadow: 0 4px 16px rgba(245,158,11,0.3);
-    }
-    .btn-ghost {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      color: var(--text);
-      backdrop-filter: var(--blur);
-    }
-    .btn-ghost:hover { background: var(--surface-hover); }
-    .btn-back {
-      background: none; border: none;
-      color: var(--text-muted);
-      font-family: 'Inter', sans-serif;
-      font-size: 11px; font-weight: 600;
-      cursor: pointer; padding: 6px 0;
-      width: auto; display: inline-flex; align-items: center; gap: 4px;
-      transition: color 0.2s;
-    }
-    .btn-back:hover { color: var(--accent); }
+    .btn-primary{background:rgba(99,102,241,0.55);color:#fff;box-shadow:0 4px 15px rgba(99,102,241,0.4),inset 0 1px 0 rgba(255,255,255,0.2);}
+    .btn-danger {background:rgba(239,68,68,0.55); color:#fff;box-shadow:0 4px 15px rgba(239,68,68,0.35),inset 0 1px 0 rgba(255,255,255,0.2);}
+    .btn-back{background:none;border:none;color:var(--tm);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;cursor:pointer;padding:6px 0;width:auto;display:inline-flex;align-items:center;gap:4px;transition:color 0.2s;}
+    .btn-back:hover{color:var(--accent);}
 
     /* ── Tab switcher ── */
-    .tab-switcher {
-      display: flex;
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: 10px;
-      padding: 3px;
-      gap: 3px;
-      margin-bottom: 12px;
-      backdrop-filter: var(--blur);
-    }
-    .tab-btn {
-      flex: 1; padding: 7px;
-      border: none; background: transparent;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: 'Inter', sans-serif;
-      font-size: 12px; font-weight: 600;
-      color: var(--text-muted);
-      transition: all 0.2s;
-    }
-    .tab-btn.active {
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #fff;
-      box-shadow: 0 2px 8px var(--accent-glow);
-    }
+    .tab-switcher{display:flex;background:var(--glass2);border:1px solid var(--border2);border-radius:10px;padding:3px;gap:3px;margin-bottom:12px;backdrop-filter:var(--blur);}
+    .tab-btn{flex:1;padding:7px;border:none;background:transparent;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--tm);transition:all 0.2s;}
+    .tab-btn.active{background:rgba(99,102,241,0.55);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.4);}
 
     /* ── Auth form ── */
-    .auth-form { display: flex; flex-direction: column; gap: 8px; }
-    .auth-message {
-      font-size: 11px; font-weight: 500;
-      min-height: 16px; text-align: center;
-      padding: 5px 8px; border-radius: 8px;
-      margin-top: 6px;
-    }
-    .auth-message.error   { background: rgba(239,68,68,0.1);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-    .auth-message.success { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+    .auth-form{display:flex;flex-direction:column;gap:8px;}
+    .auth-msg{font-size:11px;font-weight:500;min-height:16px;text-align:center;padding:5px 8px;border-radius:8px;margin-top:6px;}
+    .auth-msg.error  {background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+    .auth-msg.success{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3);}
 
     /* ── Status pill ── */
-    .status-pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 50px;
-      padding: 5px 12px;
-      font-size: 11px; font-weight: 600;
-      color: var(--text);
-      backdrop-filter: var(--blur);
-      box-shadow: var(--shadow-sm);
-      margin-bottom: 12px;
-    }
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
-    }
+    .status-pill{display:inline-flex;align-items:center;gap:6px;background:var(--glass2);border:1px solid var(--border2);border-radius:50px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--t);backdrop-filter:var(--blur);box-shadow:var(--shadow-sm);margin-bottom:12px;}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,0.25);}
 
-    /* ── Usage bar ── */
-    .usage-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      margin-bottom: 12px;
-      backdrop-filter: var(--blur);
-      box-shadow: var(--shadow-sm);
-    }
-    .usage-label {
-      font-size: 10px; font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.6px;
-      margin-bottom: 6px;
-    }
-    .usage-track {
-      height: 5px;
-      background: var(--divider);
-      border-radius: 50px; overflow: hidden;
-    }
-    .usage-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-      border-radius: 50px;
-      transition: width 0.4s ease;
-    }
-    .usage-text {
-      font-size: 10px; font-weight: 600;
-      color: var(--accent); margin-top: 4px;
-    }
+    /* ── Usage card ── */
+    .usage-card{background:var(--glass2);border:1px solid var(--border2);border-radius:12px;padding:10px 12px;margin-bottom:12px;backdrop-filter:var(--blur);box-shadow:var(--shadow-sm);}
+    .usage-label{font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;}
+    .usage-track{height:5px;background:rgba(255,255,255,0.1);border-radius:50px;overflow:hidden;}
+    .usage-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:50px;transition:width 0.4s ease;}
+    .usage-text{font-size:10px;font-weight:600;color:var(--accent);margin-top:4px;}
 
     /* ── Nav buttons ── */
-    .nav-grid { display: flex; flex-direction: column; gap: 7px; }
-    .nav-btn {
-      display: flex; align-items: center; gap: 11px;
-      padding: 11px 13px;
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 12px;
-      cursor: pointer;
-      font-family: 'Inter', sans-serif;
-      font-size: 12px; font-weight: 600;
-      color: var(--text);
-      backdrop-filter: var(--blur);
-      box-shadow: var(--shadow-sm);
-      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-      text-align: left;
-    }
-    .nav-btn:hover {
-      background: var(--surface-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px var(--accent-glow);
-    }
-    .nav-btn:active { transform: scale(0.98); }
-    .nav-icon {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; flex-shrink: 0;
-    }
-    .nav-icon.indigo  { background: rgba(99,102,241,0.15); }
-    .nav-icon.violet  { background: rgba(139,92,246,0.15); }
-    .nav-icon.emerald { background: rgba(16,185,129,0.15); }
-    .nav-icon.amber   { background: rgba(245,158,11,0.15); }
-    .nav-label { font-size: 12px; font-weight: 600; color: var(--text); }
-    .nav-desc  { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-    .nav-arrow { margin-left: auto; color: var(--text-muted); font-size: 13px; }
+    .nav-grid{display:flex;flex-direction:column;gap:7px;}
+    .nav-btn{display:flex;align-items:center;gap:11px;padding:11px 13px;background:var(--glass2);border:1px solid var(--border2);border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--t);backdrop-filter:var(--blur);box-shadow:var(--shadow-sm);transition:all 0.18s;text-align:left;}
+    .nav-btn:hover{background:var(--glass);transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,102,241,0.3),inset 0 1px 0 rgba(255,255,255,0.15);}
+    .nav-btn:active{transform:translateY(1px);}
+    .nav-icon{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;backdrop-filter:blur(8px);}
+    .ni-indigo{background:rgba(99,102,241,0.3);border:1px solid rgba(99,102,241,0.4);}
+    .ni-violet{background:rgba(139,92,246,0.3);border:1px solid rgba(139,92,246,0.4);}
+    .ni-emerald{background:rgba(16,185,129,0.3);border:1px solid rgba(16,185,129,0.4);}
+    .ni-amber{background:rgba(245,158,11,0.3);border:1px solid rgba(245,158,11,0.4);}
+    .ni-cyan{background:rgba(6,182,212,0.3);border:1px solid rgba(6,182,212,0.4);}
+    .nav-label{font-size:12px;font-weight:700;color:var(--t);}
+    .nav-desc{font-size:10px;font-weight:500;color:var(--tm);}
+    .nav-arrow{margin-left:auto;color:var(--tm);font-size:14px;}
 
     /* ── Section title ── */
-    .section-title {
-      font-size: 14px; font-weight: 700;
-      color: var(--text);
-      margin-bottom: 12px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .section-icon {
-      width: 26px; height: 26px; border-radius: 7px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
-      background: rgba(99,102,241,0.12);
-    }
+    .section-title{font-size:14px;font-weight:800;color:var(--t);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+    .section-icon{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;background:rgba(99,102,241,0.3);border:1px solid rgba(99,102,241,0.4);}
 
     /* ── Settings ── */
-    .field { margin-bottom: 10px; }
-    .field-label {
-      display: block;
-      font-size: 10px; font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.6px;
-      margin-bottom: 4px;
-    }
-    .tier-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 10px; border-radius: 50px;
-      font-size: 11px; font-weight: 600;
-      background: var(--badge-bg); color: var(--badge-text);
-      border: 1px solid var(--input-border);
-    }
-    .tier-badge.premium {
-      background: rgba(245,158,11,0.12);
-      color: #f59e0b;
-      border-color: rgba(245,158,11,0.25);
-    }
-    .divider { height: 1px; background: var(--divider); margin: 12px 0; }
-    .settings-message {
-      font-size: 11px; font-weight: 500;
-      min-height: 16px; padding: 5px 8px; border-radius: 8px;
-    }
-    .settings-message.error   { background: rgba(239,68,68,0.1);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-    .settings-message.success { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+    .field{margin-bottom:10px;}
+    .field-label{display:block;font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;}
+    .tier-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:50px;font-size:11px;font-weight:700;background:rgba(129,140,248,0.2);color:#c7d2fe;border:1px solid rgba(129,140,248,0.35);}
+    .tier-badge.premium{background:rgba(245,158,11,0.2);color:#fde68a;border-color:rgba(245,158,11,0.4);}
+    .divider{height:1px;background:var(--border2);margin:12px 0;}
+    .settings-msg{font-size:11px;font-weight:500;min-height:16px;padding:5px 8px;border-radius:8px;}
+    .settings-msg.error  {background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+    .settings-msg.success{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3);}
 
-    /* ── Resume upload ── */
-    .drop-zone {
-      border: 1.5px dashed var(--input-border);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      background: var(--input-bg);
-      backdrop-filter: var(--blur);
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      margin-bottom: 10px;
-    }
-    .drop-zone:hover { border-color: var(--accent); background: var(--surface-hover); }
-    .drop-zone input[type="file"] { display: none; }
-    .drop-icon { font-size: 26px; margin-bottom: 5px; }
-    .drop-text { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-    .drop-hint { font-size: 10px; color: var(--text-muted); opacity: 0.7; margin-top: 2px; }
-    .drop-filename { font-size: 11px; font-weight: 600; color: var(--accent); margin-top: 4px; }
-    #upload-status {
-      font-size: 11px; font-weight: 500;
-      color: var(--text-muted);
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: 10px;
-      padding: 8px 10px;
-      min-height: 34px;
-      line-height: 1.5;
-      backdrop-filter: var(--blur);
-    }
+    /* ── Drop zone ── */
+    .drop-zone{border:1.5px dashed var(--border2);border-radius:12px;padding:22px;text-align:center;background:var(--glass2);backdrop-filter:var(--blur);cursor:pointer;transition:all 0.2s;margin-bottom:10px;display:block;}
+    .drop-zone:hover{border-color:var(--accent);background:var(--glass);}
+    .drop-zone input[type="file"]{display:none;}
+    .drop-icon{font-size:26px;margin-bottom:5px;}
+    .drop-text{font-size:12px;font-weight:600;color:var(--tm);}
+    .drop-hint{font-size:10px;color:var(--tm);opacity:0.7;margin-top:2px;}
+    .drop-filename{font-size:11px;font-weight:700;color:var(--accent);margin-top:4px;}
+    #upload-status{font-size:11px;font-weight:500;color:var(--tm);background:var(--glass2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;min-height:34px;line-height:1.5;backdrop-filter:var(--blur);}
+
+    /* ── Gen Resume view ── */
+    #resume-gen-status{font-size:11px;font-weight:500;color:var(--tm);background:var(--glass2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;min-height:34px;line-height:1.5;backdrop-filter:var(--blur);margin-bottom:10px;}
+    .kw-chip{display:inline-block;padding:3px 9px;background:rgba(74,222,128,0.2);color:#86efac;border:1px solid rgba(74,222,128,0.35);border-radius:50px;font-size:10px;font-weight:700;margin:2px;}
+    #latex-output{width:100%;height:180px;font-family:'Courier New',monospace;font-size:10px;font-weight:400;background:var(--glass2);color:var(--t);border:1px solid var(--border2);border-radius:10px;padding:9px 11px;box-sizing:border-box;resize:vertical;outline:none;backdrop-filter:var(--blur);line-height:1.4;}
+    .btn-green{background:rgba(34,197,94,0.55);color:#fff;box-shadow:0 4px 15px rgba(34,197,94,0.35),inset 0 1px 0 rgba(255,255,255,0.2);}
+    .btn-row{display:flex;gap:8px;margin-top:8px;}
+    .btn-row .btn{flex:1;}
 
     /* ── Dashboard ── */
-    #dashboard-status {
-      font-size: 11px; font-weight: 500;
-      color: var(--text-muted); margin-bottom: 8px; min-height: 14px;
-    }
-    .app-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      margin-bottom: 7px;
-      backdrop-filter: var(--blur);
-      box-shadow: var(--shadow-sm);
-    }
-    .app-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 5px; }
-    .app-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-    .app-company { font-size: 10px; font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .app-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .app-date { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-    .app-select {
-      font-family: 'Inter', sans-serif;
-      font-size: 10px; font-weight: 600;
-      padding: 3px 7px;
-      border: 1px solid var(--input-border);
-      border-radius: 7px;
-      background: var(--input-bg);
-      color: var(--accent);
-      cursor: pointer; outline: none;
-      backdrop-filter: var(--blur);
-    }
-    .pagination {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 10px; gap: 8px;
-    }
-    .pagination button {
-      padding: 5px 12px;
-      font-family: 'Inter', sans-serif;
-      font-size: 11px; font-weight: 600;
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      background: var(--surface);
-      color: var(--text);
-      cursor: pointer;
-      backdrop-filter: var(--blur);
-      transition: background 0.2s;
-    }
-    .pagination button:hover:not(:disabled) { background: var(--surface-hover); }
-    .pagination button:disabled { opacity: 0.35; cursor: default; }
-    #dashboard-page-info { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    #dashboard-status{font-size:11px;font-weight:500;color:var(--tm);margin-bottom:8px;min-height:14px;}
+    .app-card{background:var(--glass2);border:1px solid var(--border2);border-radius:12px;padding:10px 12px;margin-bottom:7px;backdrop-filter:var(--blur);box-shadow:var(--shadow-sm);}
+    .app-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px;}
+    .app-title{font-size:12px;font-weight:700;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+    .app-company{font-size:10px;font-weight:500;color:var(--tm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .app-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .app-date{font-size:10px;font-weight:500;color:var(--tm);}
+    .app-select{font-family:'Inter',sans-serif;font-size:10px;font-weight:600;padding:3px 7px;border:1px solid var(--border2);border-radius:7px;background:var(--glass2);color:var(--accent);cursor:pointer;outline:none;backdrop-filter:var(--blur);}
+    .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px;}
+    .pagination button{padding:5px 12px;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;border:1px solid var(--border2);border-radius:8px;background:var(--glass2);color:var(--t);cursor:pointer;backdrop-filter:var(--blur);transition:all 0.18s;}
+    .pagination button:hover:not(:disabled){background:var(--glass);filter:brightness(1.1);}
+    .pagination button:disabled{opacity:0.35;cursor:default;}
+    #dashboard-page-info{font-size:11px;font-weight:600;color:var(--tm);}
   </style>
 </head>
 <body>
 
   <header>
     <div class="header-left">
-      <div class="header-icon">🚀</div>
+      <div class="logo-chip">🚀</div>
       <div>
         <div class="header-title">Job Helper</div>
         <div class="header-sub">Auto Application Assistant</div>
       </div>
     </div>
-    <button class="theme-toggle" id="btn-theme" title="Toggle theme">🌙</button>
+    <button class="theme-btn" id="btn-theme" title="Toggle theme">🌙</button>
   </header>
 
   <!-- ── Auth view ── -->
   <section id="view-auth" style="display:none;">
-    <div class="glass" style="padding:14px;">
+    <div class="glass">
       <div class="tab-switcher">
         <button class="tab-btn active" id="tab-login">Login</button>
         <button class="tab-btn" id="tab-register">Register</button>
       </div>
       <form class="auth-form" id="form-login">
-        <input class="glass-input" type="email" id="login-email" placeholder="Email" required />
-        <input class="glass-input" type="password" id="login-password" placeholder="Password" required />
+        <input class="gi" type="email" id="login-email" placeholder="✉  Email" required/>
+        <input class="gi" type="password" id="login-password" placeholder="🔒  Password" required/>
         <button class="btn btn-primary" type="submit">Login</button>
       </form>
       <form class="auth-form" id="form-register" style="display:none;">
-        <input class="glass-input" type="email" id="register-email" placeholder="Email" required />
-        <input class="glass-input" type="password" id="register-password" placeholder="Password" required />
-        <input class="glass-input" type="password" id="register-confirm" placeholder="Confirm Password" required />
+        <input class="gi" type="email" id="register-email" placeholder="✉  Email" required/>
+        <input class="gi" type="password" id="register-password" placeholder="🔒  Password" required/>
+        <input class="gi" type="password" id="register-confirm" placeholder="🔒  Confirm Password" required/>
         <button class="btn btn-primary" type="submit">Create Account</button>
       </form>
-      <div class="auth-message" id="auth-message"></div>
+      <div class="auth-msg" id="auth-message"></div>
     </div>
   </section>
 
@@ -470,44 +225,45 @@
       <span class="status-dot"></span>
       <span id="status">Loading…</span>
     </div>
-
     <div class="usage-card">
       <div class="usage-label">Cover Letters This Month</div>
-      <div class="usage-track">
-        <div class="usage-fill" id="usage-bar" style="width:0%"></div>
-      </div>
+      <div class="usage-track"><div class="usage-fill" id="usage-bar" style="width:0%"></div></div>
       <div class="usage-text" id="usage-credits"></div>
     </div>
-
     <nav class="nav-grid">
       <button class="nav-btn" id="btn-resume">
-        <div class="nav-icon indigo">📄</div>
+        <div class="nav-icon ni-indigo">📄</div>
         <div><div class="nav-label">Upload Resume</div><div class="nav-desc">Manage your resume</div></div>
         <span class="nav-arrow">›</span>
       </button>
+      <button class="nav-btn" id="btn-gen-resume">
+        <div class="nav-icon ni-violet">✨</div>
+        <div><div class="nav-label">Generate ATS Resume</div><div class="nav-desc">AI-tailored LaTeX resume</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
       <button class="nav-btn" id="btn-dashboard">
-        <div class="nav-icon emerald">📊</div>
+        <div class="nav-icon ni-emerald">📊</div>
         <div><div class="nav-label">Dashboard</div><div class="nav-desc">Track applications</div></div>
         <span class="nav-arrow">›</span>
       </button>
       <button class="nav-btn" id="btn-settings">
-        <div class="nav-icon violet">⚙️</div>
-        <div><div class="nav-label">Account Settings</div><div class="nav-desc">Profile & password</div></div>
+        <div class="nav-icon ni-cyan">⚙️</div>
+        <div><div class="nav-label">Account Settings</div><div class="nav-desc">Profile &amp; password</div></div>
         <span class="nav-arrow">›</span>
       </button>
       <button class="nav-btn" id="btn-upgrade" style="display:none;">
-        <div class="nav-icon amber">⭐</div>
+        <div class="nav-icon ni-amber">⭐</div>
         <div><div class="nav-label">Upgrade to Premium</div><div class="nav-desc">Unlimited cover letters</div></div>
         <span class="nav-arrow">›</span>
       </button>
     </nav>
   </section>
 
-  <!-- ── Resume upload view ── -->
+  <!-- ── Upload Resume view ── -->
   <section id="view-resume" style="display:none;">
     <div class="section-title"><div class="section-icon">📄</div>Upload Resume</div>
     <label class="drop-zone" for="resume-file-input">
-      <input type="file" id="resume-file-input" accept=".pdf,.docx" />
+      <input type="file" id="resume-file-input" accept=".pdf,.docx"/>
       <div class="drop-icon">📁</div>
       <div class="drop-text">Click to choose a file</div>
       <div class="drop-hint">PDF or DOCX</div>
@@ -515,16 +271,39 @@
     </label>
     <button class="btn btn-primary" id="btn-upload-resume" style="margin-bottom:10px;">Upload</button>
     <div id="upload-status"></div>
-    <button class="btn-back" id="btn-back-from-resume" style="margin-top:8px;">← Back</button>
+    <button class="btn-back" id="btn-back-from-resume" style="margin-top:10px;">← Back</button>
+  </section>
+
+  <!-- ── Generate ATS Resume view ── -->
+  <section id="view-gen-resume" style="display:none;">
+    <div class="section-title"><div class="section-icon">✨</div>Generate ATS Resume</div>
+    <div class="glass" style="margin-bottom:12px;">
+      <p style="font-size:11px;font-weight:500;color:var(--tm);margin-bottom:10px;line-height:1.5;">Compares your resume against the current job page, identifies missing keywords, and writes a 100% ATS-friendly one-page LaTeX resume.</p>
+      <button class="btn btn-primary" id="btn-do-gen-resume">✨ Generate Now</button>
+    </div>
+    <div id="resume-gen-status" style="display:none;"></div>
+    <div id="resume-kw-section" style="display:none;margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Keywords woven in</div>
+      <div id="resume-kw-chips"></div>
+    </div>
+    <div id="resume-latex-section" style="display:none;">
+      <div style="font-size:10px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">LaTeX Source — paste into <a href="https://overleaf.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:700;">Overleaf</a></div>
+      <textarea id="latex-output" readonly></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-copy-latex">Copy LaTeX</button>
+        <a class="btn btn-green" href="https://www.overleaf.com/project" target="_blank" style="text-decoration:none;">Open Overleaf ↗</a>
+      </div>
+    </div>
+    <button class="btn-back" id="btn-back-from-gen-resume" style="margin-top:12px;">← Back</button>
   </section>
 
   <!-- ── Settings view ── -->
   <section id="view-settings" style="display:none;">
     <div class="section-title"><div class="section-icon">⚙️</div>Account Settings</div>
-    <div class="glass" style="padding:14px;">
+    <div class="glass">
       <div class="field">
         <label class="field-label">Email</label>
-        <input class="glass-input" type="email" id="settings-email" readonly />
+        <input class="gi" type="email" id="settings-email" readonly/>
       </div>
       <div class="field">
         <label class="field-label">Plan</label>
@@ -532,15 +311,15 @@
       </div>
       <button class="btn btn-danger" id="btn-logout">Logout</button>
       <div class="divider"></div>
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Change Password</div>
-      <div style="display:flex;flex-direction:column;gap:7px;">
-        <input class="glass-input" type="password" id="settings-current-password" placeholder="Current password" />
-        <input class="glass-input" type="password" id="settings-new-password" placeholder="New password" />
+      <div style="font-size:12px;font-weight:700;color:var(--t);margin-bottom:9px;">Change Password</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input class="gi" type="password" id="settings-current-password" placeholder="Current password"/>
+        <input class="gi" type="password" id="settings-new-password" placeholder="New password"/>
         <button class="btn btn-primary" id="btn-change-password">Confirm</button>
       </div>
-      <div class="settings-message" id="settings-message" style="margin-top:8px;"></div>
+      <div class="settings-msg" id="settings-message" style="margin-top:9px;"></div>
     </div>
-    <button class="btn-back" id="btn-back-from-settings" style="margin-top:10px;">← Back</button>
+    <button class="btn-back" id="btn-back-from-settings" style="margin-top:12px;">← Back</button>
   </section>
 
   <!-- ── Dashboard view ── -->
@@ -553,7 +332,7 @@
       <span id="dashboard-page-info">Page 1</span>
       <button id="btn-dashboard-next">Next →</button>
     </div>
-    <button class="btn-back" id="btn-back-from-dashboard" style="margin-top:10px;">← Back</button>
+    <button class="btn-back" id="btn-back-from-dashboard" style="margin-top:12px;">← Back</button>
   </section>
 
   <script src="popup.js"></script>

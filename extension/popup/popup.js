@@ -117,7 +117,7 @@ async function renderUsage(tier) {
 
 // ── View routing ─────────────────────────────────────────────────────────────
 
-const ALL_VIEWS = ['view-auth', 'view-main', 'view-resume', 'view-settings', 'view-dashboard'];
+const ALL_VIEWS = ['view-auth', 'view-main', 'view-resume', 'view-gen-resume', 'view-settings', 'view-dashboard'];
 
 let dashboardPage = 1;
 
@@ -142,7 +142,7 @@ function bindAuthForms() {
   const tabRegister = document.getElementById('tab-register');
   const formLogin = document.getElementById('form-login');
   const formRegister = document.getElementById('form-register');
-  const msgEl = document.getElementById('auth-message');
+  const msgEl = document.getElementById('auth-msg');
 
   // Tab switching
   tabLogin.addEventListener('click', () => {
@@ -151,7 +151,7 @@ function bindAuthForms() {
     formLogin.style.display = '';
     formRegister.style.display = 'none';
     msgEl.textContent = '';
-    msgEl.className = 'auth-message';
+    msgEl.className = 'auth-msg';
   });
 
   tabRegister.addEventListener('click', () => {
@@ -160,7 +160,7 @@ function bindAuthForms() {
     formRegister.style.display = '';
     formLogin.style.display = 'none';
     msgEl.textContent = '';
-    msgEl.className = 'auth-message';
+    msgEl.className = 'auth-msg';
   });
 
   // Login submission
@@ -169,7 +169,7 @@ function bindAuthForms() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     msgEl.textContent = 'Logging in…';
-    msgEl.className = 'auth-message';
+    msgEl.className = 'auth-msg';
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'LOGIN', email, password }, (res) => {
@@ -179,10 +179,10 @@ function bindAuthForms() {
 
     if (response.error) {
       msgEl.textContent = response.error;
-      msgEl.className = 'auth-message error';
+      msgEl.className = 'auth-msg error';
     } else {
       msgEl.textContent = 'Logged in!';
-      msgEl.className = 'auth-message success';
+      msgEl.className = 'auth-msg success';
       // Refresh popup to reflect logged-in state
       const authState = await getAuthState();
       renderStatus(authState);
@@ -200,12 +200,12 @@ function bindAuthForms() {
 
     if (password !== confirm) {
       msgEl.textContent = 'Passwords do not match.';
-      msgEl.className = 'auth-message error';
+      msgEl.className = 'auth-msg error';
       return;
     }
 
     msgEl.textContent = 'Registering…';
-    msgEl.className = 'auth-message';
+    msgEl.className = 'auth-msg';
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'REGISTER', email, password }, (res) => {
@@ -215,10 +215,10 @@ function bindAuthForms() {
 
     if (response.error) {
       msgEl.textContent = response.error;
-      msgEl.className = 'auth-message error';
+      msgEl.className = 'auth-msg error';
     } else {
       msgEl.textContent = 'Account created! Logging in…';
-      msgEl.className = 'auth-message success';
+      msgEl.className = 'auth-msg success';
       // Auto-login after successful registration
       const authState = await getAuthState();
       renderStatus(authState);
@@ -380,6 +380,11 @@ function bindNavigation({ user, tier }) {
     loadExistingResume();
   });
 
+  document.getElementById('btn-gen-resume').addEventListener('click', () => {
+    showView('view-gen-resume');
+    resetGenResumeView();
+  });
+
   document.getElementById('btn-dashboard').addEventListener('click', () => {
     showView('view-dashboard');
     loadDashboard(1);
@@ -396,6 +401,10 @@ function bindNavigation({ user, tier }) {
   });
 
   document.getElementById('btn-back-from-resume').addEventListener('click', () => {
+    showView('view-main');
+  });
+
+  document.getElementById('btn-back-from-gen-resume').addEventListener('click', () => {
     showView('view-main');
   });
 
@@ -421,23 +430,23 @@ function bindNavigation({ user, tier }) {
     });
     // Refresh popup to show auth view
     showView('view-auth');
-    document.getElementById('auth-message').textContent = '';
-    document.getElementById('auth-message').className = 'auth-message';
+    document.getElementById('auth-msg').textContent = '';
+    document.getElementById('auth-msg').className = 'auth-msg';
   });
 
   document.getElementById('btn-change-password').addEventListener('click', async () => {
     const currentPassword = document.getElementById('settings-current-password').value;
     const newPassword = document.getElementById('settings-new-password').value;
-    const msgEl = document.getElementById('settings-message');
+    const msgEl = document.getElementById('settings-msg');
 
     if (!currentPassword || !newPassword) {
       msgEl.textContent = 'Please fill in both password fields.';
-      msgEl.className = 'settings-message error';
+      msgEl.className = 'settings-msg error';
       return;
     }
 
     msgEl.textContent = 'Updating…';
-    msgEl.className = 'settings-message';
+    msgEl.className = 'settings-msg';
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage(
@@ -448,10 +457,10 @@ function bindNavigation({ user, tier }) {
 
     if (response.error) {
       msgEl.textContent = response.error;
-      msgEl.className = 'settings-message error';
+      msgEl.className = 'settings-msg error';
     } else {
       msgEl.textContent = 'Password updated.';
-      msgEl.className = 'settings-message success';
+      msgEl.className = 'settings-msg success';
       document.getElementById('settings-current-password').value = '';
       document.getElementById('settings-new-password').value = '';
     }
@@ -513,7 +522,7 @@ function bindNavigation({ user, tier }) {
 function populateSettings({ user, tier }) {
   const emailEl = document.getElementById('settings-email');
   const badgeEl = document.getElementById('settings-tier-badge');
-  const msgEl = document.getElementById('settings-message');
+  const msgEl = document.getElementById('settings-msg');
 
   emailEl.value = user?.email ?? '';
 
@@ -523,7 +532,128 @@ function populateSettings({ user, tier }) {
 
   // Clear any previous messages and password fields
   msgEl.textContent = '';
-  msgEl.className = 'settings-message';
+  msgEl.className = 'settings-msg';
   document.getElementById('settings-current-password').value = '';
   document.getElementById('settings-new-password').value = '';
 }
+
+// ── Generate ATS Resume ───────────────────────────────────────────────────────
+
+function resetGenResumeView() {
+  document.getElementById('resume-gen-status').style.display = 'none';
+  document.getElementById('resume-gen-status').textContent = '';
+  document.getElementById('resume-kw-section').style.display = 'none';
+  document.getElementById('resume-kw-chips').innerHTML = '';
+  document.getElementById('resume-latex-section').style.display = 'none';
+  document.getElementById('latex-output').value = '';
+  const btn = document.getElementById('btn-do-gen-resume');
+  btn.disabled = false;
+  btn.textContent = '✨ Generate Now';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btn-do-gen-resume').addEventListener('click', async () => {
+    const statusEl  = document.getElementById('resume-gen-status');
+    const kwSection = document.getElementById('resume-kw-section');
+    const kwChips   = document.getElementById('resume-kw-chips');
+    const latexSec  = document.getElementById('resume-latex-section');
+    const latexOut  = document.getElementById('latex-output');
+    const btn       = document.getElementById('btn-do-gen-resume');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Fetching your resume…';
+    kwSection.style.display = 'none';
+    latexSec.style.display = 'none';
+
+    // 1. Get resume id
+    const resumeRes = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+        (res) => resolve(res ?? { data: null, error: 'No response' })
+      );
+    });
+
+    if (!resumeRes.data || !resumeRes.data.id) {
+      statusEl.textContent = '⚠ No resume found. Please upload your resume first.';
+      btn.disabled = false;
+      btn.textContent = '✨ Generate Now';
+      return;
+    }
+
+    const resumeId = resumeRes.data.id;
+
+    // 2. Get the active tab's saved job description id
+    statusEl.textContent = 'Looking up current job description…';
+
+    const tabRes = await new Promise((resolve) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs[0]));
+    });
+
+    const tabUrl = tabRes?.url ?? '';
+
+    const jdRes = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: 'API_REQUEST',
+          endpoint: `http://localhost:3000/job-descriptions/by-url?url=${encodeURIComponent(tabUrl)}`,
+          method: 'GET',
+        },
+        (res) => resolve(res ?? { data: null, error: 'No response' })
+      );
+    });
+
+    if (!jdRes.data || !jdRes.data.id) {
+      statusEl.textContent = '⚠ No job description found for this page. Open a job listing first, then come back.';
+      btn.disabled = false;
+      btn.textContent = '✨ Generate Now';
+      return;
+    }
+
+    const jobDescriptionId = jdRes.data.id;
+
+    // 3. Generate
+    statusEl.textContent = 'Analysing keywords and writing your ATS resume…';
+
+    const genRes = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'GENERATE_RESUME_LATEX', jobDescriptionId, resumeId },
+        (res) => resolve(res ?? { data: null, error: 'No response' })
+      );
+    });
+
+    btn.disabled = false;
+    btn.textContent = '✨ Generate Now';
+
+    if (genRes.data && genRes.data.latexCode) {
+      statusEl.textContent = '✓ Resume generated successfully.';
+
+      // Keywords
+      if (genRes.data.missingKeywords && genRes.data.missingKeywords.length) {
+        kwChips.innerHTML = genRes.data.missingKeywords
+          .map(kw => `<span class="kw-chip">${kw}</span>`)
+          .join('');
+        kwSection.style.display = 'block';
+      }
+
+      // LaTeX
+      latexOut.value = genRes.data.latexCode;
+      latexSec.style.display = 'block';
+
+      // Copy button
+      document.getElementById('btn-copy-latex').onclick = () => {
+        navigator.clipboard.writeText(latexOut.value).then(() => {
+          const copyBtn = document.getElementById('btn-copy-latex');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy LaTeX'; }, 2000);
+        });
+      };
+
+    } else if (genRes.status === 402) {
+      statusEl.textContent = '⚠ Limit reached. Upgrade to Premium for unlimited resume generation.';
+    } else {
+      statusEl.textContent = `⚠ Error: ${genRes.error ?? 'Unknown error'}`;
+    }
+  });
+});

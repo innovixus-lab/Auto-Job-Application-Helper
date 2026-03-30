@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import pool from '../db/pool';
-import { generateCoverLetter, generateAnswers, AIServiceError } from '../services/aiGenerator';
+import { generateCoverLetter, generateAnswers, generateResumeLatex, AIServiceError } from '../services/aiGenerator';
+import { extractMissingKeywords } from '../services/matchEngine';
 import type { ParsedResume, JobDescription } from '../services/matchEngine';
 
 const router = Router();
@@ -185,6 +186,64 @@ router.post('/answers', requireAuth, async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({ data: { answers }, error: null, status: 200 });
+  } catch (err: unknown) {
+    if (err instanceof AIServiceError) {
+      return res.status(502).json({ data: null, error: 'AI service unavailable', status: 502 });
+    }
+    return res.status(500).json({ data: null, error: 'Internal error', status: 500 });
+  }
+});
+
+/**
+ * POST /generate/resume-latex
+ * Body: { jobDescriptionId: string, resumeId: string }
+ * Returns: { data: { latexCode: string, missingKeywords: string[] }, error: null, status: 200 }
+ *
+ * Compares the uploaded resume against the job description, identifies missing
+ * ATS keywords, then generates a fully tailored one-page LaTeX resume.
+ */
+router.post('/resume-latex', requireAuth, async (req: Request, res: Response) => {
+  const { jobDescriptionId, resumeId } = req.body as {
+    jobDescriptionId?: string;
+    resumeId?: string;
+  };
+
+  if (!jobDescriptionId || !resumeId) {
+    return res.status(400).json({
+      data: null,
+      error: 'jobDescriptionId and resumeId are required',
+      status: 400,
+    });
+  }
+
+  const userId = req.user!.id;
+
+  try {
+    const [resumeResult, jdResult] = await Promise.all([
+      pool.query('SELECT parsed_data FROM resumes WHERE id = $1 AND user_id = $2', [resumeId, userId]),
+      pool.query('SELECT extracted_data FROM job_descriptions WHERE id = $1 AND user_id = $2', [jobDescriptionId, userId]),
+    ]);
+
+    if (resumeResult.rows.length === 0) {
+      return res.status(404).json({ data: null, error: 'Resume not found', status: 404 });
+    }
+    if (jdResult.rows.length === 0) {
+      return res.status(404).json({ data: null, error: 'Job description not found', status: 404 });
+    }
+
+    const parsedResume  = resumeResult.rows[0].parsed_data  as ParsedResume;
+    const jobDescription = jdResult.rows[0].extracted_data as JobDescription;
+
+    // Identify missing keywords before generation so the AI can weave them in
+    const missingKeywords = extractMissingKeywords(parsedResume, jobDescription, 15);
+
+    const { latexCode } = await generateResumeLatex(parsedResume, jobDescription, missingKeywords);
+
+    return res.status(200).json({
+      data: { latexCode, missingKeywords },
+      error: null,
+      status: 200,
+    });
   } catch (err: unknown) {
     if (err instanceof AIServiceError) {
       return res.status(502).json({ data: null, error: 'AI service unavailable', status: 502 });
