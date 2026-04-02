@@ -90,56 +90,98 @@ function escapeHtml(str) {
 
 /**
  * Safe wrapper around chrome.runtime.sendMessage.
- * Handles service worker invalidation gracefully — returns an error object
- * instead of throwing, and attempts a keepalive ping first to wake the SW.
+ * Only treats true context invalidation as fatal.
+ * "receiving end does not exist" = SW not ready yet, should retry.
  */
 function safeSend(message) {
   return new Promise((resolve) => {
-    // If the extension context is gone entirely, bail immediately
     if (!chrome.runtime?.id) {
-      resolve({ data: null, error: 'Extension reloaded — please refresh the page.', status: 0 });
+      resolve({ data: null, error: '__CONTEXT_DEAD__', status: 0 });
       return;
     }
     try {
       chrome.runtime.sendMessage(message, (res) => {
-        // Swallow the "Extension context invalidated" lastError
-        if (chrome.runtime.lastError) {
-          const msg = chrome.runtime.lastError.message ?? '';
-          if (msg.includes('context invalidated') || msg.includes('receiving end does not exist')) {
-            resolve({ data: null, error: 'Extension reloaded — please refresh the page.', status: 0 });
+        const err = chrome.runtime.lastError;
+        if (err) {
+          const msg = (err.message ?? '').toLowerCase();
+          if (msg.includes('extension context invalidated') || msg.includes('context invalidated')) {
+            // True context death — content script is orphaned
+            resolve({ data: null, error: '__CONTEXT_DEAD__', status: 0 });
+          } else if (msg.includes('receiving end does not exist') || msg.includes('disconnected')) {
+            // SW not ready yet — caller should retry
+            resolve({ data: null, error: '__SW_NOT_READY__', status: 0 });
           } else {
-            resolve({ data: null, error: msg, status: 0 });
+            resolve({ data: null, error: err.message, status: 0 });
           }
           return;
         }
         resolve(res ?? { data: null, error: 'No response', status: 0 });
       });
-    } catch (err) {
-      resolve({ data: null, error: 'Extension reloaded — please refresh the page.', status: 0 });
+    } catch (e) {
+      const msg = (e?.message ?? '').toLowerCase();
+      if (msg.includes('context')) {
+        resolve({ data: null, error: '__CONTEXT_DEAD__', status: 0 });
+      } else {
+        resolve({ data: null, error: e?.message ?? 'Unknown error', status: 0 });
+      }
     }
   });
 }
 
 /**
- * Pings the service worker to wake it, then sends the real message.
- * Fully swallows "Extension context invalidated" — returns an error object.
+ * Wakes the service worker then sends the real message.
+ * Retries up to 5 times with increasing delays.
+ * Distinguishes between dead context (unrecoverable) and SW not ready (retryable).
  */
 async function wakeAndSend(message) {
-  // If context is already gone, bail immediately
-  if (!chrome.runtime?.id) {
-    return { data: null, error: 'Extension reloaded — please refresh the page.', status: 0 };
-  }
-  // Ping to wake the SW; ignore all errors
-  try {
-    await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, () => {
-        void chrome.runtime.lastError;
-        resolve();
-      });
-    });
-  } catch { /* SW was dead — safeSend will handle it */ }
+  const delays = [200, 400, 700, 1000, 1500];
 
-  return safeSend(message);
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    // True context death — nothing we can do
+    if (!chrome.runtime?.id) {
+      return { data: null, error: '__CONTEXT_DEAD__', status: 0 };
+    }
+
+    // Ping to wake the SW (ignore result — just wakes it)
+    await new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, () => {
+          void chrome.runtime.lastError;
+          resolve();
+        });
+      } catch { resolve(); }
+    });
+
+    // Small settle time for SW to finish initializing
+    await new Promise(r => setTimeout(r, 100));
+
+    const result = await safeSend(message);
+
+    if (result.error === '__CONTEXT_DEAD__') {
+      return result; // unrecoverable
+    }
+    if (result.error !== '__SW_NOT_READY__') {
+      return result; // success or real API error
+    }
+
+    // SW not ready yet — wait and retry
+    await new Promise(r => setTimeout(r, delays[attempt]));
+  }
+
+  // All retries exhausted
+  return { data: null, error: '__CONTEXT_DEAD__', status: 0 };
+}
+
+/** Renders a "please refresh" message with a button in the given element */
+function showRefreshPrompt(el) {
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:600;color:#fca5a5;line-height:1.5;">
+      ⚠ The extension was reloaded. Please refresh this page to reconnect.
+      <br><br>
+      <button id="ajah-refresh-btn" style="padding:6px 14px;background:rgba(99,102,241,0.6);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;">↺ Refresh Page</button>
+    </div>`;
+  const btn = el.querySelector('#ajah-refresh-btn');
+  if (btn) btn.addEventListener('click', () => window.location.reload());
 }
 function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   if (document.getElementById('ajah-overlay-host')) return;
@@ -320,34 +362,13 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     try {
       const res = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' });
       autofillBtn.disabled = false; autofillBtn.textContent = 'Autofill';
+      if (res.error === '__CONTEXT_DEAD__') { showRefreshPrompt(autofillOut); return; }
       if (!res || !res.data) { autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? 'Could not load resume data.')}</span>`; return; }
-
-      // Scan the host page document AND all accessible iframes
-      // (Google Forms renders inputs inside an iframe)
-      const docsToScan = [document];
-      try {
-        Array.from(document.querySelectorAll('iframe')).forEach((frame) => {
-          try {
-            const fd = frame.contentDocument || frame.contentWindow?.document;
-            if (fd) docsToScan.push(fd);
-          } catch { /* cross-origin iframe — skip */ }
-        });
-      } catch { /* ignore */ }
-
-      let totalFilled = 0;
-      let totalReview = 0;
-      for (const doc of docsToScan) {
-        const scanned = formFiller.scan(doc);
-        const mapped  = formFiller.mapFields(scanned);
-        const { filled, manualReview } = formFiller.fill(mapped, res.data);
-        totalFilled += filled;
-        totalReview += manualReview;
-      }
-
-      autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">✓ ${totalFilled} filled</span><span style="color:var(--tm);"> · ${totalReview} highlighted</span>`;
+      const { filled, manualReview } = formFiller.fillAll(res.data, document);
+      autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">✓ ${filled} filled</span><span style="color:var(--tm);"> · ${manualReview} highlighted</span>`;
     } catch {
       autofillBtn.disabled = false; autofillBtn.textContent = 'Autofill';
-      autofillOut.innerHTML = '<span style="color:#f87171;font-weight:700;">Extension reloaded — please refresh the page.</span>';
+      showRefreshPrompt(autofillOut);
     }
   });
 
@@ -360,6 +381,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     genBtn.disabled = true; genBtn.textContent = 'Generating…'; clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait…</p>';
     try {
       const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' });
+      if (rRes.error === '__CONTEXT_DEAD__') { genBtn.disabled = false; genBtn.textContent = 'Cover Letter'; showRefreshPrompt(clOut); return; }
       if (!rRes.data?.id) { genBtn.disabled = false; genBtn.textContent = 'Cover Letter'; clOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? 'No resume found. Upload first.')}</p>`; return; }
       const res = await safeSend({ type: 'GENERATE_COVER_LETTER', jobDescriptionId: jdId, resumeId: rRes.data.id });
       genBtn.disabled = false; genBtn.textContent = 'Cover Letter';
@@ -381,7 +403,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
       }
     } catch {
       genBtn.disabled = false; genBtn.textContent = 'Cover Letter';
-      clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded — please refresh the page.</p>';
+      showRefreshPrompt(clOut);
     }
   });
 
@@ -398,6 +420,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     answersBtn.disabled = true; answersBtn.textContent = 'Generating…'; answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait…</p>';
     try {
       const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' });
+      if (rRes.error === '__CONTEXT_DEAD__') { answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers'; showRefreshPrompt(answersOut); return; }
       if (!rRes.data?.id) { answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers'; answersOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? 'No resume found. Upload first.')}</p>`; return; }
       const res = await safeSend({ type: 'GENERATE_ANSWERS', jobDescriptionId: jdId, resumeId: rRes.data.id, questions });
       answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers';
@@ -424,7 +447,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
       }
     } catch {
       answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers';
-      answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded — please refresh the page.</p>';
+      showRefreshPrompt(answersOut);
     }
   });
 
@@ -452,7 +475,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
       }
     } catch (err) {
       appliedBtn.disabled = false; appliedBtn.textContent = '✓ Mark Applied';
-      appliedOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded — please refresh the page.</p>';
+      showRefreshPrompt(appliedOut);
     }
   });
 
@@ -497,7 +520,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     }
     } catch {
       resumeBtn.disabled = false; resumeBtn.textContent = '📄 Generate ATS Resume (LaTeX)';
-      resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded — please refresh the page.</p>';
+      showRefreshPrompt(resumeOut);
     }
   });
 }

@@ -851,41 +851,72 @@
   function safeSend(message) {
     return new Promise((resolve) => {
       if (!chrome.runtime?.id) {
-        resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+        resolve({ data: null, error: "__CONTEXT_DEAD__", status: 0 });
         return;
       }
       try {
         chrome.runtime.sendMessage(message, (res) => {
-          if (chrome.runtime.lastError) {
-            const msg = chrome.runtime.lastError.message ?? "";
-            if (msg.includes("context invalidated") || msg.includes("receiving end does not exist")) {
-              resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+          const err = chrome.runtime.lastError;
+          if (err) {
+            const msg = (err.message ?? "").toLowerCase();
+            if (msg.includes("extension context invalidated") || msg.includes("context invalidated")) {
+              resolve({ data: null, error: "__CONTEXT_DEAD__", status: 0 });
+            } else if (msg.includes("receiving end does not exist") || msg.includes("disconnected")) {
+              resolve({ data: null, error: "__SW_NOT_READY__", status: 0 });
             } else {
-              resolve({ data: null, error: msg, status: 0 });
+              resolve({ data: null, error: err.message, status: 0 });
             }
             return;
           }
           resolve(res ?? { data: null, error: "No response", status: 0 });
         });
-      } catch (err) {
-        resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+      } catch (e) {
+        const msg = (e?.message ?? "").toLowerCase();
+        if (msg.includes("context")) {
+          resolve({ data: null, error: "__CONTEXT_DEAD__", status: 0 });
+        } else {
+          resolve({ data: null, error: e?.message ?? "Unknown error", status: 0 });
+        }
       }
     });
   }
   async function wakeAndSend(message) {
-    if (!chrome.runtime?.id) {
-      return { data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 };
-    }
-    try {
+    const delays = [200, 400, 700, 1e3, 1500];
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (!chrome.runtime?.id) {
+        return { data: null, error: "__CONTEXT_DEAD__", status: 0 };
+      }
       await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, () => {
-          void chrome.runtime.lastError;
+        try {
+          chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, () => {
+            void chrome.runtime.lastError;
+            resolve();
+          });
+        } catch {
           resolve();
-        });
+        }
       });
-    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+      const result = await safeSend(message);
+      if (result.error === "__CONTEXT_DEAD__") {
+        return result;
+      }
+      if (result.error !== "__SW_NOT_READY__") {
+        return result;
+      }
+      await new Promise((r) => setTimeout(r, delays[attempt]));
     }
-    return safeSend(message);
+    return { data: null, error: "__CONTEXT_DEAD__", status: 0 };
+  }
+  function showRefreshPrompt(el) {
+    el.innerHTML = `
+    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:600;color:#fca5a5;line-height:1.5;">
+      \u26A0 The extension was reloaded. Please refresh this page to reconnect.
+      <br><br>
+      <button id="ajah-refresh-btn" style="padding:6px 14px;background:rgba(99,102,241,0.6);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;">\u21BA Refresh Page</button>
+    </div>`;
+    const btn = el.querySelector("#ajah-refresh-btn");
+    if (btn) btn.addEventListener("click", () => window.location.reload());
   }
   function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     if (document.getElementById("ajah-overlay-host")) return;
@@ -1048,35 +1079,20 @@
         const res = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
         autofillBtn.disabled = false;
         autofillBtn.textContent = "Autofill";
+        if (res.error === "__CONTEXT_DEAD__") {
+          showRefreshPrompt(autofillOut);
+          return;
+        }
         if (!res || !res.data) {
           autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? "Could not load resume data.")}</span>`;
           return;
         }
-        const docsToScan = [document];
-        try {
-          Array.from(document.querySelectorAll("iframe")).forEach((frame) => {
-            try {
-              const fd = frame.contentDocument || frame.contentWindow?.document;
-              if (fd) docsToScan.push(fd);
-            } catch {
-            }
-          });
-        } catch {
-        }
-        let totalFilled = 0;
-        let totalReview = 0;
-        for (const doc of docsToScan) {
-          const scanned = formFiller.scan(doc);
-          const mapped = formFiller.mapFields(scanned);
-          const { filled, manualReview } = formFiller.fill(mapped, res.data);
-          totalFilled += filled;
-          totalReview += manualReview;
-        }
-        autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${totalFilled} filled</span><span style="color:var(--tm);"> \xB7 ${totalReview} highlighted</span>`;
+        const { filled, manualReview } = formFiller.fillAll(res.data, document);
+        autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${filled} filled</span><span style="color:var(--tm);"> \xB7 ${manualReview} highlighted</span>`;
       } catch {
         autofillBtn.disabled = false;
         autofillBtn.textContent = "Autofill";
-        autofillOut.innerHTML = '<span style="color:#f87171;font-weight:700;">Extension reloaded \u2014 please refresh the page.</span>';
+        showRefreshPrompt(autofillOut);
       }
     });
     const genBtn = shadow.getElementById("ajah-gen-btn");
@@ -1092,6 +1108,12 @@
       clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
       try {
         const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        if (rRes.error === "__CONTEXT_DEAD__") {
+          genBtn.disabled = false;
+          genBtn.textContent = "Cover Letter";
+          showRefreshPrompt(clOut);
+          return;
+        }
         if (!rRes.data?.id) {
           genBtn.disabled = false;
           genBtn.textContent = "Cover Letter";
@@ -1124,7 +1146,7 @@
       } catch {
         genBtn.disabled = false;
         genBtn.textContent = "Cover Letter";
-        clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+        showRefreshPrompt(clOut);
       }
     });
     const answersBtn = shadow.getElementById("ajah-answers-btn");
@@ -1147,6 +1169,12 @@
       answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
       try {
         const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        if (rRes.error === "__CONTEXT_DEAD__") {
+          answersBtn.disabled = false;
+          answersBtn.textContent = "Gen Answers";
+          showRefreshPrompt(answersOut);
+          return;
+        }
         if (!rRes.data?.id) {
           answersBtn.disabled = false;
           answersBtn.textContent = "Gen Answers";
@@ -1185,7 +1213,7 @@
       } catch {
         answersBtn.disabled = false;
         answersBtn.textContent = "Gen Answers";
-        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+        showRefreshPrompt(answersOut);
       }
     });
     const appliedBtn = shadow.getElementById("ajah-applied-btn");
@@ -1222,7 +1250,7 @@
       } catch (err) {
         appliedBtn.disabled = false;
         appliedBtn.textContent = "\u2713 Mark Applied";
-        appliedOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+        showRefreshPrompt(appliedOut);
       }
     });
     const resumeBtn = shadow.getElementById("ajah-resume-btn");
@@ -1277,7 +1305,7 @@
       } catch {
         resumeBtn.disabled = false;
         resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
-        resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+        showRefreshPrompt(resumeOut);
       }
     });
   }

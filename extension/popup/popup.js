@@ -138,11 +138,13 @@ function showView(viewId) {
  * Wires up the Login/Register tab switcher and form submissions.
  */
 function bindAuthForms() {
-  const tabLogin = document.getElementById('tab-login');
+  const tabLogin    = document.getElementById('tab-login');
   const tabRegister = document.getElementById('tab-register');
-  const formLogin = document.getElementById('form-login');
+  const formLogin   = document.getElementById('form-login');
   const formRegister = document.getElementById('form-register');
-  const msgEl = document.getElementById('auth-msg');
+
+  // Helper — always look up fresh so it's never null
+  const msg = () => document.getElementById('auth-message');
 
   // Tab switching
   tabLogin.addEventListener('click', () => {
@@ -150,8 +152,7 @@ function bindAuthForms() {
     tabRegister.classList.remove('active');
     formLogin.style.display = '';
     formRegister.style.display = 'none';
-    msgEl.textContent = '';
-    msgEl.className = 'auth-msg';
+    const m = msg(); if (m) { m.textContent = ''; m.className = 'auth-msg'; }
   });
 
   tabRegister.addEventListener('click', () => {
@@ -159,17 +160,16 @@ function bindAuthForms() {
     tabLogin.classList.remove('active');
     formRegister.style.display = '';
     formLogin.style.display = 'none';
-    msgEl.textContent = '';
-    msgEl.className = 'auth-msg';
+    const m = msg(); if (m) { m.textContent = ''; m.className = 'auth-msg'; }
   });
 
   // Login submission
   formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('login-email').value.trim();
+    const email    = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    msgEl.textContent = 'Logging in…';
-    msgEl.className = 'auth-msg';
+    const m = msg();
+    if (m) { m.textContent = 'Logging in…'; m.className = 'auth-msg'; }
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'LOGIN', email, password }, (res) => {
@@ -178,12 +178,9 @@ function bindAuthForms() {
     });
 
     if (response.error) {
-      msgEl.textContent = response.error;
-      msgEl.className = 'auth-msg error';
+      if (m) { m.textContent = response.error; m.className = 'auth-msg error'; }
     } else {
-      msgEl.textContent = 'Logged in!';
-      msgEl.className = 'auth-msg success';
-      // Refresh popup to reflect logged-in state
+      if (m) { m.textContent = 'Logged in!'; m.className = 'auth-msg success'; }
       const authState = await getAuthState();
       renderStatus(authState);
       renderUsage(authState.tier);
@@ -194,18 +191,17 @@ function bindAuthForms() {
   // Register submission
   formRegister.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('register-email').value.trim();
+    const email    = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    const confirm = document.getElementById('register-confirm').value;
+    const confirm  = document.getElementById('register-confirm').value;
+    const m = msg();
 
     if (password !== confirm) {
-      msgEl.textContent = 'Passwords do not match.';
-      msgEl.className = 'auth-msg error';
+      if (m) { m.textContent = 'Passwords do not match.'; m.className = 'auth-msg error'; }
       return;
     }
 
-    msgEl.textContent = 'Registering…';
-    msgEl.className = 'auth-msg';
+    if (m) { m.textContent = 'Registering…'; m.className = 'auth-msg'; }
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'REGISTER', email, password }, (res) => {
@@ -214,12 +210,9 @@ function bindAuthForms() {
     });
 
     if (response.error) {
-      msgEl.textContent = response.error;
-      msgEl.className = 'auth-msg error';
+      if (m) { m.textContent = response.error; m.className = 'auth-msg error'; }
     } else {
-      msgEl.textContent = 'Account created! Logging in…';
-      msgEl.className = 'auth-msg success';
-      // Auto-login after successful registration
+      if (m) { m.textContent = 'Account created! Logging in…'; m.className = 'auth-msg success'; }
       const authState = await getAuthState();
       renderStatus(authState);
       renderUsage(authState.tier);
@@ -457,14 +450,14 @@ function bindNavigation({ user, tier }) {
     });
     // Refresh popup to show auth view
     showView('view-auth');
-    document.getElementById('auth-msg').textContent = '';
-    document.getElementById('auth-msg').className = 'auth-msg';
+    document.getElementById('auth-message').textContent = '';
+    document.getElementById('auth-message').className = 'auth-msg';
   });
 
   document.getElementById('btn-change-password').addEventListener('click', async () => {
     const currentPassword = document.getElementById('settings-current-password').value;
     const newPassword = document.getElementById('settings-new-password').value;
-    const msgEl = document.getElementById('settings-msg');
+    const msgEl = document.getElementById('settings-message');
 
     if (!currentPassword || !newPassword) {
       msgEl.textContent = 'Please fill in both password fields.';
@@ -555,7 +548,7 @@ function bindNavigation({ user, tier }) {
 function populateSettings({ user, tier }) {
   const emailEl = document.getElementById('settings-email');
   const badgeEl = document.getElementById('settings-tier-badge');
-  const msgEl = document.getElementById('settings-msg');
+  const msgEl = document.getElementById('settings-message');
 
   emailEl.value = user?.email ?? '';
 

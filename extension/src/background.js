@@ -72,7 +72,16 @@ class JobDetector {
 
 // ── Service worker keepalive ─────────────────────────────────────────────────
 // MV3 service workers terminate after ~30s of inactivity.
-// Using chrome.storage as a no-op heartbeat keeps it alive during long fetches.
+// Strategy 1: chrome.alarms fires every 20s to keep the SW alive persistently.
+// Strategy 2: swKeepalive() used during long async operations.
+
+chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.33 }); // ~20s
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'sw-keepalive') {
+    chrome.storage.local.get('_ping', () => { void chrome.runtime.lastError; });
+  }
+});
+
 function swKeepalive() {
   const interval = setInterval(() => {
     chrome.storage.local.get('_ping', () => {
