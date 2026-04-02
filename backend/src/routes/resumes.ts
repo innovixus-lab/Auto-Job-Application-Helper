@@ -131,4 +131,45 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.patch('/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const {
+      name, email, phone, address,
+      skills, workExperience, education, certifications, projects,
+    } = req.body as Record<string, unknown>;
+
+    const result = await pool.query(
+      `UPDATE resumes
+       SET parsed_data = parsed_data || $1::jsonb,
+           updated_at  = now()
+       WHERE user_id = $2
+       RETURNING id`,
+      [
+        JSON.stringify({
+          ...(name           !== undefined && { name }),
+          ...(email          !== undefined && { email }),
+          ...(phone          !== undefined && { phone }),
+          ...(address        !== undefined && { address }),
+          ...(skills         !== undefined && { skills }),
+          ...(workExperience !== undefined && { workExperience }),
+          ...(education      !== undefined && { education }),
+          ...(certifications !== undefined && { certifications }),
+          ...(projects       !== undefined && { projects }),
+        }),
+        userId,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ data: null, error: 'No resume found. Upload a resume first.', status: 404 });
+    }
+
+    return res.status(200).json({ data: { ok: true }, error: null, status: 200 });
+  } catch (err) {
+    console.error('[PATCH /resumes/me]', err);
+    return res.status(500).json({ data: null, error: 'Internal error', status: 500 });
+  }
+});
+
 export default router;

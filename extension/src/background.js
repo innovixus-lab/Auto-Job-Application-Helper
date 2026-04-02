@@ -56,6 +56,16 @@ class JobDetector {
       return { detected: true, platform: 'icims' };
     }
 
+    // Google Forms job applications
+    if (hostname === 'docs.google.com' && pathname.startsWith('/forms/')) {
+      return { detected: true, platform: 'googleforms' };
+    }
+
+    // Typeform job applications
+    if (hostname.endsWith('.typeform.com')) {
+      return { detected: true, platform: 'typeform' };
+    }
+
     return { detected: false, platform: null };
   }
 }

@@ -125,6 +125,14 @@ export class JobDetector {
     if (hostname.endsWith('.icims.com') && pathname.includes('/jobs/')) {
       return { detected: true, platform: 'icims' };
     }
+    // Google Forms job applications
+    if (hostname === 'docs.google.com' && pathname.startsWith('/forms/')) {
+      return { detected: true, platform: 'googleforms' };
+    }
+    // Typeform job applications
+    if (hostname.endsWith('.typeform.com')) {
+      return { detected: true, platform: 'typeform' };
+    }
     // Additional common ATS patterns
     if (hostname.includes('smartrecruiters.com') && pathname.includes('/jobs/')) {
       return { detected: true, platform: 'smartrecruiters' };

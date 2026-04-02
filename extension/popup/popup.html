@@ -168,7 +168,23 @@
     .btn-row{display:flex;gap:8px;margin-top:8px;}
     .btn-row .btn{flex:1;}
 
-    /* ── Dashboard ── */
+    /* ── Resume edit form ── */
+    .re-section-title{font-size:11px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:0.6px;margin:14px 0 6px;display:flex;align-items:center;gap:6px;}
+    .re-section-title:first-child{margin-top:0;}
+    .re-entry{background:var(--glass2);border:1px solid var(--border2);border-radius:10px;padding:10px 11px;margin-bottom:7px;position:relative;}
+    .re-entry-remove{position:absolute;top:8px;right:8px;background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.4);border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;line-height:1.4;transition:all 0.15s;}
+    .re-entry-remove:hover{background:rgba(239,68,68,0.5);}
+    .re-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:var(--glass2);border:1px solid var(--border2);border-radius:8px;color:var(--accent);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.18s;margin-top:4px;}
+    .re-add-btn:hover{background:var(--glass);filter:brightness(1.1);}
+    .re-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px;}
+    .re-row.full{grid-template-columns:1fr;}
+    .gi-sm{width:100%;padding:7px 10px;background:var(--glass2);border:1px solid var(--border2);border-radius:8px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;color:var(--t);outline:none;transition:border-color 0.2s;}
+    .gi-sm:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(129,140,248,0.2);}
+    .gi-sm::placeholder{color:var(--tm);}
+    textarea.gi-sm{resize:vertical;min-height:56px;line-height:1.4;}
+    .re-save-msg{font-size:11px;font-weight:500;min-height:16px;padding:5px 8px;border-radius:8px;margin-top:8px;}
+    .re-save-msg.error  {background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+    .re-save-msg.success{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3);}
     #dashboard-status{font-size:11px;font-weight:500;color:var(--tm);margin-bottom:8px;min-height:14px;}
     .app-card{background:var(--glass2);border:1px solid var(--border2);border-radius:12px;padding:10px 12px;margin-bottom:7px;backdrop-filter:var(--blur);box-shadow:var(--shadow-sm);}
     .app-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px;}
@@ -239,6 +255,11 @@
       <button class="nav-btn" id="btn-gen-resume">
         <div class="nav-icon ni-violet">✨</div>
         <div><div class="nav-label">Generate ATS Resume</div><div class="nav-desc">AI-tailored LaTeX resume</div></div>
+        <span class="nav-arrow">›</span>
+      </button>
+      <button class="nav-btn" id="btn-edit-data">
+        <div class="nav-icon ni-amber">✏️</div>
+        <div><div class="nav-label">Edit My Data</div><div class="nav-desc">Update your resume info</div></div>
         <span class="nav-arrow">›</span>
       </button>
       <button class="nav-btn" id="btn-dashboard">
@@ -320,6 +341,55 @@
       <div class="settings-msg" id="settings-message" style="margin-top:9px;"></div>
     </div>
     <button class="btn-back" id="btn-back-from-settings" style="margin-top:12px;">← Back</button>
+  </section>
+
+  <!-- ── Resume Edit view ── -->
+  <section id="view-resume-edit" style="display:none;">
+    <div class="section-title"><div class="section-icon">✏️</div>Review &amp; Edit Resume</div>
+
+    <!-- Personal Info -->
+    <div class="re-section-title">👤 Personal Info</div>
+    <div class="re-row">
+      <div><label class="field-label">Full Name</label><input class="gi-sm" id="re-name" placeholder="Your name"/></div>
+      <div><label class="field-label">Email</label><input class="gi-sm" type="email" id="re-email" placeholder="email@example.com"/></div>
+    </div>
+    <div class="re-row">
+      <div><label class="field-label">Phone</label><input class="gi-sm" id="re-phone" placeholder="+1 234 567 8900"/></div>
+      <div><label class="field-label">Address</label><input class="gi-sm" id="re-address" placeholder="City, Country"/></div>
+    </div>
+
+    <!-- Skills -->
+    <div class="re-section-title">🛠 Skills <span style="font-size:10px;font-weight:500;color:var(--tm);text-transform:none;letter-spacing:0;">(comma-separated)</span></div>
+    <div class="re-row full">
+      <textarea class="gi-sm" id="re-skills" placeholder="React, Node.js, Python…" style="min-height:48px;"></textarea>
+    </div>
+
+    <!-- Work Experience -->
+    <div class="re-section-title">💼 Work Experience</div>
+    <div id="re-work-list"></div>
+    <button class="re-add-btn" id="re-add-work">+ Add Position</button>
+
+    <!-- Education -->
+    <div class="re-section-title">🎓 Education</div>
+    <div id="re-edu-list"></div>
+    <button class="re-add-btn" id="re-add-edu">+ Add Education</button>
+
+    <!-- Projects -->
+    <div class="re-section-title">🚀 Projects</div>
+    <div id="re-proj-list"></div>
+    <button class="re-add-btn" id="re-add-proj">+ Add Project</button>
+
+    <!-- Certifications -->
+    <div class="re-section-title">📜 Certifications <span style="font-size:10px;font-weight:500;color:var(--tm);text-transform:none;letter-spacing:0;">(one per line)</span></div>
+    <div class="re-row full">
+      <textarea class="gi-sm" id="re-certs" placeholder="AWS Certified Developer&#10;Google Cloud Professional…" style="min-height:56px;"></textarea>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn btn-primary" id="btn-save-resume-edit" style="flex:1;">💾 Save Changes</button>
+    </div>
+    <div class="re-save-msg" id="re-save-msg"></div>
+    <button class="btn-back" id="btn-back-from-resume-edit" style="margin-top:10px;">← Back</button>
   </section>
 
   <!-- ── Dashboard view ── -->

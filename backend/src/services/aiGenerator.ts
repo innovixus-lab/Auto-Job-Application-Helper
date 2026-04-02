@@ -106,43 +106,158 @@ export async function generateResumeLatex(
   const company = jd.company ?? 'the company';
   const jdBody  = jd.body    ?? '';
 
-  const systemPrompt = `You are an expert resume writer and LaTeX typesetter.
-Your task: produce a COMPLETE, COMPILABLE LaTeX resume document that is:
-- Exactly one page (use geometry margins 0.5in all sides)
-- 100% ATS-friendly (no tables, no columns, no graphics, no special fonts — plain text sections only)
-- Tailored to the specific job below by naturally weaving in the MISSING KEYWORDS listed
-- Showcases ALL work experience, achievements, skills, and education from the candidate data
+  const systemPrompt = `Act as a senior technical resume writer and LaTeX expert.
+Generate a complete, compilable LaTeX resume that EXACTLY follows the template structure, packages, and custom commands shown below.
+Tailor all content to the job description and candidate details provided.
 
-LaTeX requirements:
-- Use \\documentclass[10pt]{article} with geometry package (0.5in margins)
-- Sections: Summary, Skills, Experience, Education, Certifications (omit empty ones)
-- Each experience bullet must start with a strong action verb and include a quantified achievement where possible
-- Skills section: comma-separated inline list (ATS-safe)
-- No \\includegraphics, no tikz, no fancy fonts
-- End with \\end{document}
+RULES:
+- Use ONLY the packages and commands defined in the template — do not add new ones
+- Follow the exact section order: Heading → Education → Technical Skills → Professional Experience → Projects → Certifications → Additional Information
+- Medium-length bullet points (1–2 lines), technical, practical, impact-driven
+- No generic HR-style wording — every bullet must feel like real work
+- Use strong action verbs: Developed, Implemented, Designed, Architected, Optimized, Automated, Built
+- Naturally weave in ALL of the MISSING KEYWORDS provided
+- ATS-friendly: the template already handles formatting — do not add tables, graphics, or tikz
+- Additional Information section must include: Year of Graduation, Years of Experience, Work Location preference, Availability note (not part of any other interview process for this company)
+- Return ONLY the raw LaTeX code — no markdown fences, no explanation
 
-Return ONLY the raw LaTeX code. No markdown fences, no explanation.`;
+LATEX TEMPLATE TO FOLLOW EXACTLY:
 
-  const userPrompt = `TARGET JOB: ${role} at ${company}
-JOB DESCRIPTION EXCERPT:
-${jdBody.slice(0, 1500)}
+%-------------------------
+\\documentclass[letterpaper,11pt]{article}
+\\usepackage{latexsym}
+\\usepackage[empty]{fullpage}
+\\usepackage{titlesec}
+\\usepackage{marvosym}
+\\usepackage[usenames,dvipsnames]{color}
+\\usepackage{verbatim}
+\\usepackage{enumitem}
+\\usepackage[hidelinks]{hyperref}
+\\usepackage{fancyhdr}
+\\usepackage[english]{babel}
+\\usepackage{tabularx}
+\\usepackage{fontawesome5}
+\\usepackage[sfdefault]{roboto}
+\\pagestyle{fancy}
+\\fancyhf{}
+\\fancyfoot{}
+\\renewcommand{\\headrulewidth}{0pt}
+\\renewcommand{\\footrulewidth}{0pt}
+\\addtolength{\\oddsidemargin}{-0.5in}
+\\addtolength{\\evensidemargin}{-0.5in}
+\\addtolength{\\textwidth}{1in}
+\\addtolength{\\topmargin}{-.5in}
+\\addtolength{\\textheight}{1.0in}
+\\urlstyle{same}
+\\raggedbottom
+\\raggedright
+\\setlength{\\tabcolsep}{0in}
+\\titleformat{\\section}{\\vspace{-6pt}\\scshape\\raggedright\\large}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
+\\newcommand{\\resumeItem}[1]{\\item\\small{{#1 \\vspace{-2pt}}}}
+\\newcommand{\\resumeSubheading}[4]{\\vspace{-2pt}\\item\\begin{tabular*}{0.97\\textwidth}[t]{l@{\\extracolsep{\\fill}}r}\\textbf{#1} & #2 \\\\\\textit{\\small#3} & \\textit{\\small #4} \\\\\\end{tabular*}\\vspace{-7pt}}
+\\newcommand{\\resumeProjectHeading}[2]{\\item\\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}\\small#1 & #2 \\\\\\end{tabular*}\\vspace{-7pt}}
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-4pt}}
+\\renewcommand\\labelitemii{$\\vcenter{\\hbox{\\tiny$\\bullet$}}$}
+\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.15in, label={}]}
+\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}
 
-MISSING KEYWORDS TO WEAVE IN: ${missingKeywords.join(', ')}
+\\begin{document}
 
-CANDIDATE DATA:
+% HEADING
+\\begin{center}
+\\textbf{\\Huge \\scshape CANDIDATE NAME} \\\\ \\vspace{4pt}
+\\small \\faPhone\\ PHONE $|$ \\href{mailto:EMAIL}{\\faEnvelope\\ EMAIL} $|$ \\href{GITHUB}{\\faGithub\\ GITHUB_HANDLE} $|$ \\href{LINKEDIN}{\\faLinkedin\\ LINKEDIN_HANDLE} \\\\
+\\small CITY, STATE, COUNTRY $|$ Willing to relocate to TARGET_LOCATION
+\\end{center}
+
+% EDUCATION
+\\section{Education}
+\\resumeSubHeadingListStart
+  \\resumeSubheading{COLLEGE NAME}{LOCATION}{DEGREE, CGPA: X.XX/10.0}{YEAR -- YEAR}
+  \\resumeItemListStart
+    \\resumeItem{Year of Graduation: YEAR | Relevant Coursework: COURSE1, COURSE2, COURSE3}
+  \\resumeItemListEnd
+\\resumeSubHeadingListEnd
+
+% TECHNICAL SKILLS
+\\section{Technical Skills}
+\\begin{itemize}[leftmargin=0.15in, label={}]
+\\small{\\item{
+  \\textbf{Programming}{: ...} \\\\
+  \\textbf{Web Technologies}{: ...} \\\\
+  \\textbf{Database}{: ...} \\\\
+  \\textbf{Cloud \\& Integration}{: ...} \\\\
+  \\textbf{AI \\& Automation}{: ...} \\\\
+  \\textbf{Version Control \\& CI/CD}{: ...} \\\\
+  \\textbf{Tools}{: ...}
+}}
+\\end{itemize}
+
+% PROFESSIONAL EXPERIENCE
+\\section{Professional Experience}
+\\resumeSubHeadingListStart
+  \\resumeSubheading{JOB TITLE}{DURATION}{COMPANY}{LOCATION}
+  \\resumeItemListStart
+    \\resumeItem{...}
+    % 6-8 bullets for main role, 2-4 for smaller roles
+  \\resumeItemListEnd
+\\resumeSubHeadingListEnd
+
+% PROJECTS
+\\section{Projects}
+\\resumeSubHeadingListStart
+  \\resumeProjectHeading{\\textbf{PROJECT NAME} $|$ \\emph{TECH STACK}}{YEAR}
+  \\resumeItemListStart
+    \\resumeItem{...}
+    % 4-6 bullets per project
+  \\resumeItemListEnd
+\\resumeSubHeadingListEnd
+
+% CERTIFICATIONS
+\\section{Certifications}
+\\begin{itemize}[leftmargin=0.15in, label={}]
+\\small{\\item{CERT1 $|$ CERT2 $|$ CERT3}}
+\\end{itemize}
+
+% ADDITIONAL INFORMATION
+\\section{Additional Information}
+\\begin{itemize}[leftmargin=0.15in, label={}]
+\\small{\\item{
+  \\textbf{Year of Graduation}{: YEAR} \\\\
+  \\textbf{Years of Experience}{: X years} \\\\
+  \\textbf{Work Location}{: Willing to relocate and work in TARGET_LOCATION} \\\\
+  \\textbf{Availability}{: Not part of any other COMPANY interview process}
+}}
+\\end{itemize}
+
+\\end{document}
+
+Fill in all placeholders with the actual candidate data and job-tailored content. Return only the completed LaTeX.`;
+
+  const userPrompt = `Job Description:
+Role: ${role} at ${company}
+${jdBody.slice(0, 2000)}
+
+Missing Keywords to weave in: ${missingKeywords.join(', ')}
+
+Candidate Details:
 Name: ${resume.name}
-Email: ${resume.email}
 Phone: ${resume.phone}
-Skills: ${(resume.skills || []).join(', ')}
+Email: ${resume.email}
+Skills: ${(resume.skills || []).join(', ') || 'Not provided'}
 Work Experience:
 ${(resume.workExperience || [])
   .map((e) => `- ${e.title} at ${e.company} (${e.startDate} – ${e.endDate ?? 'Present'})\n  ${e.description}`)
-  .join('\n')}
+  .join('\n') || 'Not provided'}
 Education:
 ${(resume.education || []).map((e) => `- ${e.degree} from ${e.institution}`).join('\n') || 'Not provided'}
 Certifications: ${(resume.certifications || []).join(', ') || 'None'}
+Projects:
+${((resume as any).projects || []).map((p: any) => `- ${p.name}${p.techStack ? ` | ${p.techStack}` : ''}: ${p.description}`).join('\n') || 'Not provided'}
 
-Generate the complete LaTeX resume now.`;
+Generate a complete ATS-optimized LaTeX resume.`;
 
   let completion;
   try {
@@ -153,7 +268,7 @@ Generate the complete LaTeX resume now.`;
         { role: 'user',   content: userPrompt   },
       ],
       temperature: 0.4,
-      max_tokens: 2500,
+      max_tokens: 3500,
     });
   } catch (err) {
     throw new AIServiceError('OpenAI API call failed', err);

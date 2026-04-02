@@ -117,7 +117,7 @@ async function renderUsage(tier) {
 
 // ── View routing ─────────────────────────────────────────────────────────────
 
-const ALL_VIEWS = ['view-auth', 'view-main', 'view-resume', 'view-gen-resume', 'view-settings', 'view-dashboard'];
+const ALL_VIEWS = ['view-auth', 'view-main', 'view-resume', 'view-resume-edit', 'view-gen-resume', 'view-settings', 'view-dashboard'];
 
 let dashboardPage = 1;
 
@@ -385,6 +385,29 @@ function bindNavigation({ user, tier }) {
     resetGenResumeView();
   });
 
+  document.getElementById('btn-edit-data').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-edit-data');
+    btn.querySelector('.nav-desc').textContent = 'Loading…';
+
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+        (r) => resolve(r ?? { data: null, error: 'No response' })
+      );
+    });
+
+    btn.querySelector('.nav-desc').textContent = 'Update your resume info';
+
+    if (res.data?.parsedData) {
+      populateResumeEditForm(res.data.parsedData);
+      showView('view-resume-edit');
+    } else {
+      // No resume yet — send them to upload first
+      showView('view-resume');
+      document.getElementById('upload-status').textContent = '⚠ No resume found. Upload one first.';
+    }
+  });
+
   document.getElementById('btn-dashboard').addEventListener('click', () => {
     showView('view-dashboard');
     loadDashboard(1);
@@ -405,6 +428,10 @@ function bindNavigation({ user, tier }) {
   });
 
   document.getElementById('btn-back-from-gen-resume').addEventListener('click', () => {
+    showView('view-main');
+  });
+
+  document.getElementById('btn-back-from-resume-edit').addEventListener('click', () => {
     showView('view-main');
   });
 
@@ -495,14 +522,20 @@ function bindNavigation({ user, tier }) {
         },
         (response) => {
           if (response?.data?.name) {
-            const d = response.data;
-            const scoreBar = d.resumeScore != null ? ` · Score: ${d.resumeScore}/100` : '';
-            const level = d.experienceLevel ? ` · Level: ${d.experienceLevel}` : '';
-            const field = d.predictedField && d.predictedField !== 'NA' ? ` · Field: ${d.predictedField}` : '';
-            statusEl.innerHTML =
-              `<strong>✓ Uploaded: ${d.name}</strong>${scoreBar}${level}${field}<br>` +
-              (d.skills?.length ? `<em>Skills: ${d.skills.slice(0, 8).join(', ')}${d.skills.length > 8 ? '…' : ''}</em><br>` : '') +
-              (d.recommendedSkills?.length ? `<em>Recommended: ${d.recommendedSkills.slice(0, 5).join(', ')}…</em>` : '');
+            // Fetch full parsed data then open edit form
+            chrome.runtime.sendMessage(
+              { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'GET' },
+              (res) => {
+                if (res?.data?.parsedData) {
+                  populateResumeEditForm(res.data.parsedData);
+                  showView('view-resume-edit');
+                } else {
+                  // Fallback: show summary in upload view
+                  const d = response.data;
+                  statusEl.innerHTML = `<strong>✓ Uploaded: ${d.name}</strong>`;
+                }
+              }
+            );
           } else {
             statusEl.textContent = `Error: ${response?.error ?? 'Upload failed'}`;
           }
@@ -654,6 +687,216 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.textContent = '⚠ Limit reached. Upgrade to Premium for unlimited resume generation.';
     } else {
       statusEl.textContent = `⚠ Error: ${genRes.error ?? 'Unknown error'}`;
+    }
+  });
+});
+
+// ── Resume Edit Form ──────────────────────────────────────────────────────────
+
+/**
+ * Populates the resume edit form with parsed resume data.
+ * @param {object} pd - parsedData from GET /resumes/me
+ */
+function populateResumeEditForm(pd) {
+  document.getElementById('re-name').value    = pd.name    ?? '';
+  document.getElementById('re-email').value   = pd.email   ?? '';
+  document.getElementById('re-phone').value   = pd.phone   ?? '';
+  document.getElementById('re-address').value = pd.address ?? '';
+  document.getElementById('re-skills').value  = (pd.skills ?? []).join(', ');
+  document.getElementById('re-certs').value   = (pd.certifications ?? []).join('\n');
+
+  renderWorkList(pd.workExperience ?? []);
+  renderEduList(pd.education ?? []);
+  renderProjList(pd.projects ?? []);
+
+  // Clear previous save message
+  const msg = document.getElementById('re-save-msg');
+  msg.textContent = '';
+  msg.className = 're-save-msg';
+}
+
+// ── Work experience entries ───────────────────────────────────────────────────
+
+function workEntryHTML(idx, entry = {}) {
+  return `
+    <div class="re-entry" id="re-work-${idx}">
+      <button class="re-entry-remove" data-type="work" data-idx="${idx}">✕</button>
+      <div class="re-row">
+        <div><label class="field-label">Job Title</label><input class="gi-sm" data-field="title" placeholder="Software Engineer" value="${esc(entry.title ?? '')}"/></div>
+        <div><label class="field-label">Company</label><input class="gi-sm" data-field="company" placeholder="Acme Corp" value="${esc(entry.company ?? '')}"/></div>
+      </div>
+      <div class="re-row">
+        <div><label class="field-label">Start Date</label><input class="gi-sm" data-field="startDate" placeholder="Jan 2021" value="${esc(entry.startDate ?? '')}"/></div>
+        <div><label class="field-label">End Date</label><input class="gi-sm" data-field="endDate" placeholder="Present" value="${esc(entry.endDate ?? '')}"/></div>
+      </div>
+      <div class="re-row full">
+        <label class="field-label">Description</label>
+        <textarea class="gi-sm" data-field="description" placeholder="Key responsibilities and achievements…">${esc(entry.description ?? '')}</textarea>
+      </div>
+    </div>`;
+}
+
+function renderWorkList(entries) {
+  const list = document.getElementById('re-work-list');
+  list.innerHTML = entries.map((e, i) => workEntryHTML(i, e)).join('');
+  bindRemoveButtons();
+}
+
+function addWorkEntry() {
+  const list = document.getElementById('re-work-list');
+  const idx = list.children.length;
+  list.insertAdjacentHTML('beforeend', workEntryHTML(idx, {}));
+  bindRemoveButtons();
+}
+
+// ── Education entries ─────────────────────────────────────────────────────────
+
+function eduEntryHTML(idx, entry = {}) {
+  return `
+    <div class="re-entry" id="re-edu-${idx}">
+      <button class="re-entry-remove" data-type="edu" data-idx="${idx}">✕</button>
+      <div class="re-row">
+        <div><label class="field-label">Degree</label><input class="gi-sm" data-field="degree" placeholder="B.Tech Computer Science" value="${esc(entry.degree ?? '')}"/></div>
+        <div><label class="field-label">Institution</label><input class="gi-sm" data-field="institution" placeholder="MIT" value="${esc(entry.institution ?? '')}"/></div>
+      </div>
+      <div class="re-row full">
+        <label class="field-label">Graduation Year</label>
+        <input class="gi-sm" data-field="graduationYear" placeholder="2022" value="${esc(entry.graduationYear ?? '')}"/>
+      </div>
+    </div>`;
+}
+
+function renderEduList(entries) {
+  const list = document.getElementById('re-edu-list');
+  list.innerHTML = entries.map((e, i) => eduEntryHTML(i, e)).join('');
+  bindRemoveButtons();
+}
+
+function addEduEntry() {
+  const list = document.getElementById('re-edu-list');
+  const idx = list.children.length;
+  list.insertAdjacentHTML('beforeend', eduEntryHTML(idx, {}));
+  bindRemoveButtons();
+}
+
+// ── Project entries ───────────────────────────────────────────────────────────
+
+function projEntryHTML(idx, entry = {}) {
+  return `
+    <div class="re-entry" id="re-proj-${idx}">
+      <button class="re-entry-remove" data-type="proj" data-idx="${idx}">✕</button>
+      <div class="re-row">
+        <div><label class="field-label">Project Name</label><input class="gi-sm" data-field="name" placeholder="My Awesome Project" value="${esc(entry.name ?? '')}"/></div>
+        <div><label class="field-label">Tech Stack</label><input class="gi-sm" data-field="techStack" placeholder="React, Node.js, MongoDB" value="${esc(entry.techStack ?? '')}"/></div>
+      </div>
+      <div class="re-row full">
+        <label class="field-label">Description / Bullet Points</label>
+        <textarea class="gi-sm" data-field="description" placeholder="What was built, key features, impact…">${esc(entry.description ?? '')}</textarea>
+      </div>
+    </div>`;
+}
+
+function renderProjList(entries) {
+  const list = document.getElementById('re-proj-list');
+  list.innerHTML = entries.map((e, i) => projEntryHTML(i, e)).join('');
+  bindRemoveButtons();
+}
+
+function addProjEntry() {
+  const list = document.getElementById('re-proj-list');
+  const idx = list.children.length;
+  list.insertAdjacentHTML('beforeend', projEntryHTML(idx, {}));
+  bindRemoveButtons();
+}
+
+function readProjList() {
+  return Array.from(document.getElementById('re-proj-list').querySelectorAll('.re-entry')).map((entry) => ({
+    name:        entry.querySelector('[data-field="name"]')?.value.trim()        ?? '',
+    techStack:   entry.querySelector('[data-field="techStack"]')?.value.trim()   ?? '',
+    description: entry.querySelector('[data-field="description"]')?.value.trim() ?? '',
+  }));
+}
+
+// ── Remove buttons ────────────────────────────────────────────────────────────
+
+function bindRemoveButtons() {
+  document.querySelectorAll('.re-entry-remove').forEach((btn) => {
+    btn.onclick = () => btn.closest('.re-entry').remove();
+  });
+}
+
+// ── Read form back into object ────────────────────────────────────────────────
+
+function readWorkList() {
+  return Array.from(document.getElementById('re-work-list').querySelectorAll('.re-entry')).map((entry) => ({
+    title:       entry.querySelector('[data-field="title"]')?.value.trim()       ?? '',
+    company:     entry.querySelector('[data-field="company"]')?.value.trim()     ?? '',
+    startDate:   entry.querySelector('[data-field="startDate"]')?.value.trim()   ?? '',
+    endDate:     entry.querySelector('[data-field="endDate"]')?.value.trim()     || null,
+    description: entry.querySelector('[data-field="description"]')?.value.trim() ?? '',
+  }));
+}
+
+function readEduList() {
+  return Array.from(document.getElementById('re-edu-list').querySelectorAll('.re-entry')).map((entry) => ({
+    degree:         entry.querySelector('[data-field="degree"]')?.value.trim()         ?? '',
+    institution:    entry.querySelector('[data-field="institution"]')?.value.trim()    ?? '',
+    graduationYear: entry.querySelector('[data-field="graduationYear"]')?.value.trim() ?? '',
+  }));
+}
+
+// ── HTML escape helper ────────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Wire up edit form buttons ─────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('re-add-work').addEventListener('click', addWorkEntry);
+  document.getElementById('re-add-edu').addEventListener('click', addEduEntry);
+  document.getElementById('re-add-proj').addEventListener('click', addProjEntry);
+
+  document.getElementById('btn-save-resume-edit').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-resume-edit');
+    const msg = document.getElementById('re-save-msg');
+
+    btn.disabled = true;
+    btn.textContent = '💾 Saving…';
+    msg.textContent = '';
+    msg.className = 're-save-msg';
+
+    const payload = {
+      name:           document.getElementById('re-name').value.trim(),
+      email:          document.getElementById('re-email').value.trim(),
+      phone:          document.getElementById('re-phone').value.trim(),
+      address:        document.getElementById('re-address').value.trim(),
+      skills:         document.getElementById('re-skills').value.split(',').map(s => s.trim()).filter(Boolean),
+      certifications: document.getElementById('re-certs').value.split('\n').map(s => s.trim()).filter(Boolean),
+      workExperience: readWorkList(),
+      education:      readEduList(),
+      projects:       readProjList(),
+    };
+
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'API_REQUEST', endpoint: 'http://localhost:3000/resumes/me', method: 'PATCH', body: payload },
+        (r) => resolve(r ?? { error: 'No response' })
+      );
+    });
+
+    btn.disabled = false;
+    btn.textContent = '💾 Save Changes';
+
+    if (res.error) {
+      msg.textContent = res.error;
+      msg.className = 're-save-msg error';
+    } else {
+      msg.textContent = '✓ Resume saved successfully.';
+      msg.className = 're-save-msg success';
     }
   });
 });

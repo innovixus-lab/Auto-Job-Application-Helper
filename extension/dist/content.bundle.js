@@ -109,6 +109,12 @@
       if (hostname.endsWith(".icims.com") && pathname.includes("/jobs/")) {
         return { detected: true, platform: "icims" };
       }
+      if (hostname === "docs.google.com" && pathname.startsWith("/forms/")) {
+        return { detected: true, platform: "googleforms" };
+      }
+      if (hostname.endsWith(".typeform.com")) {
+        return { detected: true, platform: "typeform" };
+      }
       if (hostname.includes("smartrecruiters.com") && pathname.includes("/jobs/")) {
         return { detected: true, platform: "smartrecruiters" };
       }
@@ -531,6 +537,85 @@
     }
   };
 
+  // src/extractors/googleFormsExtractor.js
+  var GoogleFormsExtractor = class extends JDExtractorBase {
+    extract() {
+      const titleEl = document.querySelector("[data-item-id] .exportFormTitle") || document.querySelector(".freebirdFormviewerViewHeaderTitle") || document.querySelector('[role="heading"][aria-level="1"]') || document.querySelector("h1") || null;
+      const rawTitle = titleEl ? cleanText(titleEl.textContent) : cleanText(document.title.replace(/\s*-\s*Google Forms.*$/i, "").trim());
+      const bodyParts = [];
+      const descSelectors = [
+        ".freebirdFormviewerViewHeaderDescription",
+        "[data-item-id] .exportFormDescription",
+        "[jsname] .freebirdFormviewerViewHeaderDescription",
+        // Generic: any <p> or <div> inside the form header area
+        'form [role="heading"] + *',
+        "form p"
+      ];
+      for (const sel of descSelectors) {
+        document.querySelectorAll(sel).forEach((el) => {
+          const t = cleanText(el.textContent);
+          if (t.length > 20) bodyParts.push(t);
+        });
+      }
+      const sectionSelectors = [
+        "[data-params]",
+        // Google Forms section containers
+        ".freebirdFormviewerViewItemsSectionheaderTitle",
+        ".freebirdFormviewerViewItemsSectionheaderDescriptionText",
+        ".freebirdFormviewerViewItemsItemItemTitle"
+      ];
+      for (const sel of sectionSelectors) {
+        document.querySelectorAll(sel).forEach((el) => {
+          const t = cleanText(el.textContent);
+          if (t.length > 10 && !bodyParts.includes(t)) bodyParts.push(t);
+        });
+      }
+      if (bodyParts.length === 0) {
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+          {
+            acceptNode(node2) {
+              const parent = node2.parentElement;
+              if (!parent) return NodeFilter.FILTER_REJECT;
+              const tag = parent.tagName;
+              if (["SCRIPT", "STYLE", "INPUT", "TEXTAREA", "BUTTON", "NOSCRIPT"].includes(tag)) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              const text = node2.textContent.trim();
+              return text.length > 5 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+          }
+        );
+        const seen = /* @__PURE__ */ new Set();
+        let node;
+        while (node = walker.nextNode()) {
+          const t = node.textContent.trim();
+          if (!seen.has(t)) {
+            seen.add(t);
+            bodyParts.push(t);
+          }
+        }
+      }
+      const body = bodyParts.join("\n").trim() || null;
+      let company = null;
+      const fullText = rawTitle + " " + (body ?? "");
+      const companyMatch = fullText.match(
+        /^(.{3,40}?)\s+(?:is\s+hiring|hiring|internship|job|application|apply)/i
+      );
+      if (companyMatch) company = companyMatch[1].trim();
+      return {
+        platform: "googleforms",
+        sourceUrl: window.location.href,
+        title: rawTitle || null,
+        company,
+        location: null,
+        employmentType: null,
+        body
+      };
+    }
+  };
+
   // src/formFiller.js
   var EXCLUDED_INPUT_TYPES = /* @__PURE__ */ new Set(["hidden", "submit", "button", "reset", "image"]);
   var RESUME_FIELD_KEYWORDS = {
@@ -698,6 +783,10 @@
         return new WorkdayExtractor();
       case "icims":
         return new ICIMSExtractor();
+      case "googleforms":
+        return new GoogleFormsExtractor();
+      case "typeform":
+        return { extract: () => genericExtract("typeform") };
       default:
         return { extract: () => genericExtract(platform) };
     }
@@ -706,6 +795,9 @@
     try {
       const { detected, platform } = new JobDetector().detect(window.location.href);
       if (!detected) return;
+      if (platform === "googleforms") {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
       const jobDescription = getExtractor(platform).extract();
       if (!jobDescription || jobDescription.title === null && jobDescription.body === null) return;
       const authState = await new Promise((resolve) => {
@@ -755,6 +847,45 @@
   }
   function escapeHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function safeSend(message) {
+    return new Promise((resolve) => {
+      if (!chrome.runtime?.id) {
+        resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage(message, (res) => {
+          if (chrome.runtime.lastError) {
+            const msg = chrome.runtime.lastError.message ?? "";
+            if (msg.includes("context invalidated") || msg.includes("receiving end does not exist")) {
+              resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+            } else {
+              resolve({ data: null, error: msg, status: 0 });
+            }
+            return;
+          }
+          resolve(res ?? { data: null, error: "No response", status: 0 });
+        });
+      } catch (err) {
+        resolve({ data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 });
+      }
+    });
+  }
+  async function wakeAndSend(message) {
+    if (!chrome.runtime?.id) {
+      return { data: null, error: "Extension reloaded \u2014 please refresh the page.", status: 0 };
+    }
+    try {
+      await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, () => {
+          void chrome.runtime.lastError;
+          resolve();
+        });
+      });
+    } catch {
+    }
+    return safeSend(message);
   }
   function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     if (document.getElementById("ajah-overlay-host")) return;
@@ -909,20 +1040,44 @@
     });
     const autofillBtn = shadow.getElementById("ajah-autofill-btn");
     const autofillOut = shadow.getElementById("ajah-autofill-output");
-    autofillBtn.addEventListener("click", () => {
+    autofillBtn.addEventListener("click", async () => {
       autofillBtn.disabled = true;
       autofillBtn.textContent = "Filling\u2026";
       autofillOut.textContent = "";
-      chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => {
+      try {
+        const res = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
         autofillBtn.disabled = false;
         autofillBtn.textContent = "Autofill";
         if (!res || !res.data) {
-          autofillOut.innerHTML = '<span style="color:#f87171;font-weight:700;">Could not load resume data.</span>';
+          autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? "Could not load resume data.")}</span>`;
           return;
         }
-        const { filled, manualReview } = formFiller.fill(formFiller.mapFields(formFiller.scan(document)), res.data);
-        autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${filled} filled</span><span style="color:var(--tm);"> \xB7 ${manualReview} need review</span>`;
-      });
+        const docsToScan = [document];
+        try {
+          Array.from(document.querySelectorAll("iframe")).forEach((frame) => {
+            try {
+              const fd = frame.contentDocument || frame.contentWindow?.document;
+              if (fd) docsToScan.push(fd);
+            } catch {
+            }
+          });
+        } catch {
+        }
+        let totalFilled = 0;
+        let totalReview = 0;
+        for (const doc of docsToScan) {
+          const scanned = formFiller.scan(doc);
+          const mapped = formFiller.mapFields(scanned);
+          const { filled, manualReview } = formFiller.fill(mapped, res.data);
+          totalFilled += filled;
+          totalReview += manualReview;
+        }
+        autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${totalFilled} filled</span><span style="color:var(--tm);"> \xB7 ${totalReview} highlighted</span>`;
+      } catch {
+        autofillBtn.disabled = false;
+        autofillBtn.textContent = "Autofill";
+        autofillOut.innerHTML = '<span style="color:#f87171;font-weight:700;">Extension reloaded \u2014 please refresh the page.</span>';
+      }
     });
     const genBtn = shadow.getElementById("ajah-gen-btn");
     const clOut = shadow.getElementById("ajah-cl-output");
@@ -935,14 +1090,15 @@
       genBtn.disabled = true;
       genBtn.textContent = "Generating\u2026";
       clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
-      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
-      if (!rRes.data?.id) {
-        genBtn.disabled = false;
-        genBtn.textContent = "Cover Letter";
-        clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
-        return;
-      }
-      chrome.runtime.sendMessage({ type: "GENERATE_COVER_LETTER", jobDescriptionId: jdId, resumeId: rRes.data.id }, (res) => {
+      try {
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        if (!rRes.data?.id) {
+          genBtn.disabled = false;
+          genBtn.textContent = "Cover Letter";
+          clOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? "No resume found. Upload first.")}</p>`;
+          return;
+        }
+        const res = await safeSend({ type: "GENERATE_COVER_LETTER", jobDescriptionId: jdId, resumeId: rRes.data.id });
         genBtn.disabled = false;
         genBtn.textContent = "Cover Letter";
         if (res?.data?.coverLetterText) {
@@ -965,7 +1121,11 @@
           <button id="ajah-retry-btn" style="${BTN_RED}">Retry</button>`;
           shadow.getElementById("ajah-retry-btn").addEventListener("click", () => genBtn.click());
         }
-      });
+      } catch {
+        genBtn.disabled = false;
+        genBtn.textContent = "Cover Letter";
+        clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+      }
     });
     const answersBtn = shadow.getElementById("ajah-answers-btn");
     const answersOut = shadow.getElementById("ajah-answers-output");
@@ -985,14 +1145,15 @@
       answersBtn.disabled = true;
       answersBtn.textContent = "Generating\u2026";
       answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
-      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
-      if (!rRes.data?.id) {
-        answersBtn.disabled = false;
-        answersBtn.textContent = "Gen Answers";
-        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
-        return;
-      }
-      chrome.runtime.sendMessage({ type: "GENERATE_ANSWERS", jobDescriptionId: jdId, resumeId: rRes.data.id, questions }, (res) => {
+      try {
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        if (!rRes.data?.id) {
+          answersBtn.disabled = false;
+          answersBtn.textContent = "Gen Answers";
+          answersOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? "No resume found. Upload first.")}</p>`;
+          return;
+        }
+        const res = await safeSend({ type: "GENERATE_ANSWERS", jobDescriptionId: jdId, resumeId: rRes.data.id, questions });
         answersBtn.disabled = false;
         answersBtn.textContent = "Gen Answers";
         if (res?.data?.answers) {
@@ -1021,11 +1182,15 @@
           <button id="ajah-ans-retry" style="${BTN_RED}">Retry</button>`;
           shadow.getElementById("ajah-ans-retry").addEventListener("click", () => answersBtn.click());
         }
-      });
+      } catch {
+        answersBtn.disabled = false;
+        answersBtn.textContent = "Gen Answers";
+        answersOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+      }
     });
     const appliedBtn = shadow.getElementById("ajah-applied-btn");
     const appliedOut = shadow.getElementById("ajah-applied-output");
-    appliedBtn.addEventListener("click", () => {
+    appliedBtn.addEventListener("click", async () => {
       const jdId = jobDescription && jobDescription.id;
       if (!jdId) {
         appliedOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>';
@@ -1034,7 +1199,8 @@
       appliedBtn.disabled = true;
       appliedBtn.textContent = "Saving\u2026";
       appliedOut.textContent = "";
-      chrome.runtime.sendMessage({ type: "MARK_AS_APPLIED", jobDescriptionId: jdId, matchScore: jobDescription._matchScore ?? null }, (res) => {
+      try {
+        const res = await wakeAndSend({ type: "MARK_AS_APPLIED", jobDescriptionId: jdId, matchScore: jobDescription._matchScore ?? null });
         if (res?.status === 201) {
           appliedBtn.textContent = "\u2713 Applied";
           appliedBtn.style.background = "rgba(107,114,128,0.5)";
@@ -1053,7 +1219,11 @@
           appliedBtn.textContent = "\u2713 Mark Applied";
           appliedOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>`;
         }
-      });
+      } catch (err) {
+        appliedBtn.disabled = false;
+        appliedBtn.textContent = "\u2713 Mark Applied";
+        appliedOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+      }
     });
     const resumeBtn = shadow.getElementById("ajah-resume-btn");
     const resumeOut = shadow.getElementById("ajah-resume-output");
@@ -1066,26 +1236,27 @@
       resumeBtn.disabled = true;
       resumeBtn.textContent = "\u23F3 Generating\u2026";
       resumeOut.innerHTML = '<p style="color:var(--tm);font-size:11px;margin:0;">Analysing job and building your ATS resume\u2026</p>';
-      const rRes = await new Promise((r) => chrome.runtime.sendMessage({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" }, (res) => r(res ?? {})));
-      if (!rRes.data?.id) {
-        resumeBtn.disabled = false;
-        resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
-        resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">No resume found. Upload first.</p>';
-        return;
-      }
-      chrome.runtime.sendMessage({ type: "GENERATE_RESUME_LATEX", jobDescriptionId: jdId, resumeId: rRes.data.id }, (res) => {
+      try {
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        if (!rRes.data?.id) {
+          resumeBtn.disabled = false;
+          resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
+          resumeOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? "No resume found. Upload first.")}</p>`;
+          return;
+        }
+        const res = await safeSend({ type: "GENERATE_RESUME_LATEX", jobDescriptionId: jdId, resumeId: rRes.data.id });
         resumeBtn.disabled = false;
         resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
         if (res?.data?.latexCode) {
           const kws = res.data.missingKeywords || [];
           const kwHtml = kws.length ? `<div style="margin-bottom:8px;"><p style="${LBL_S}">Keywords woven in</p><div style="display:flex;flex-wrap:wrap;gap:3px;">${kws.map((k) => `<span style="padding:2px 8px;background:rgba(74,222,128,0.2);color:#86efac;border-radius:50px;font-size:10px;font-weight:700;border:1px solid rgba(74,222,128,0.35);">${escapeHtml(k)}</span>`).join("")}</div></div>` : "";
           resumeOut.innerHTML = `${kwHtml}
-          <p style="${LBL_S}">LaTeX \u2014 paste into <a href="https://overleaf.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:700;">Overleaf</a></p>
-          <textarea id="ajah-latex-ta" readonly style="${TA_S}height:200px;font-family:'Courier New',monospace;font-size:10px;font-weight:400;line-height:1.4;">${escapeHtml(res.data.latexCode)}</textarea>
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <button id="ajah-latex-copy" style="${BTN_INDIGO}flex:1;justify-content:center;">Copy LaTeX</button>
-            <a href="https://www.overleaf.com/project" target="_blank" style="${BTN_GREEN}flex:1;justify-content:center;text-decoration:none;display:inline-flex;">Open Overleaf \u2197</a>
-          </div>`;
+        <p style="${LBL_S}">LaTeX \u2014 paste into <a href="https://overleaf.com" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:700;">Overleaf</a></p>
+        <textarea id="ajah-latex-ta" readonly style="${TA_S}height:200px;font-family:'Courier New',monospace;font-size:10px;font-weight:400;line-height:1.4;">${escapeHtml(res.data.latexCode)}</textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button id="ajah-latex-copy" style="${BTN_INDIGO}flex:1;justify-content:center;">Copy LaTeX</button>
+          <a href="https://www.overleaf.com/project" target="_blank" style="${BTN_GREEN}flex:1;justify-content:center;text-decoration:none;display:inline-flex;">Open Overleaf \u2197</a>
+        </div>`;
           shadow.getElementById("ajah-latex-copy").addEventListener("click", () => {
             navigator.clipboard.writeText(shadow.getElementById("ajah-latex-ta").value).then(() => {
               const b = shadow.getElementById("ajah-latex-copy");
@@ -1097,13 +1268,17 @@
           });
         } else if (res?.status === 402) {
           resumeOut.innerHTML = `<div class="glass-card" style="color:#fde68a;font-size:11px;font-weight:600;margin-bottom:8px;">Limit reached. Upgrade for unlimited resumes.</div>
-          <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
+        <a href="https://autojobhelper.com/upgrade" target="_blank" style="${BTN_INDIGO}text-decoration:none;display:inline-flex;">\u2B50 Upgrade</a>`;
         } else {
           resumeOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0 0 6px;font-size:11px;">Error: ${escapeHtml(res?.error ?? "Unknown")}</p>
-          <button id="ajah-resume-retry" style="${BTN_RED}">Retry</button>`;
+        <button id="ajah-resume-retry" style="${BTN_RED}">Retry</button>`;
           shadow.getElementById("ajah-resume-retry").addEventListener("click", () => resumeBtn.click());
         }
-      });
+      } catch {
+        resumeBtn.disabled = false;
+        resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";
+        resumeOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Extension reloaded \u2014 please refresh the page.</p>';
+      }
     });
   }
   function mountReopenButton() {
