@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import pool from '../db/pool';
 import { validateRegisterBody } from '../middleware/validate';
 import { signAccessToken, generateRefreshToken, hashToken } from '../lib/tokens';

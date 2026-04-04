@@ -4,7 +4,7 @@
 
 import * as fc from 'fast-check';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { signAccessToken, generateRefreshToken, hashToken } from '../../lib/tokens';
 
 beforeAll(() => {
