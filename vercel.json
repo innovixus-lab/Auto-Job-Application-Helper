@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend/src/index.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/migrations/**"
+        ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "backend/src/index.ts",
+      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+    }
+  ]
+}

@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express';
 import multer, { FileFilterCallback } from 'multer';
-import fs from 'fs';
-import path from 'path';
 import { requireAuth } from '../middleware/auth';
 import { parsePDF, parseDOCX } from '../services/resumeParser';
 import pool from '../db/pool';
@@ -52,18 +50,13 @@ router.post(
 
       try {
         const userId = req.user!.id;
-        const timestamp = Date.now();
-        const filename = `${userId}_${timestamp}_${req.file.originalname}`;
-        const uploadsDir = path.resolve('uploads');
-        const filePath = path.join(uploadsDir, filename);
-
-        fs.mkdirSync(uploadsDir, { recursive: true });
-        fs.writeFileSync(filePath, req.file.buffer);
-
         const parsedResume =
           req.file.mimetype === 'application/pdf'
             ? await parsePDF(req.file.buffer)
             : await parseDOCX(req.file.buffer);
+
+        // Use a memory reference instead of a disk path (Vercel has no writable FS)
+        const fileRef = `memory:${userId}_${Date.now()}_${req.file.originalname}`;
 
         const result = await pool.query(
           `INSERT INTO resumes (user_id, file_ref, parsed_data)
@@ -73,7 +66,7 @@ router.post(
                  parsed_data = EXCLUDED.parsed_data,
                  updated_at = now()
            RETURNING id`,
-          [userId, filePath, JSON.stringify(parsedResume)]
+          [userId, fileRef, JSON.stringify(parsedResume)]
         );
 
         const { id } = result.rows[0];
