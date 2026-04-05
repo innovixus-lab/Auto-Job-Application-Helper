@@ -15,6 +15,44 @@ import { FormFiller } from './formFiller.js';
 
 let overlayDismissed = false;
 
+// ── SW connection health monitor ──────────────────────────────────────────────
+// Opens a persistent port to the SW. If the port disconnects (SW restarted /
+// extension reloaded), we wait for the SW to come back and reinitialize
+// automatically — no page refresh needed.
+
+let _port = null;
+let _reinitScheduled = false;
+
+function connectPort() {
+  try {
+    _port = chrome.runtime.connect({ name: 'ajah-keepalive' });
+    _port.onDisconnect.addListener(() => {
+      _port = null;
+      void chrome.runtime.lastError; // suppress unchecked error
+      scheduleReinit();
+    });
+  } catch { /* context already dead on first load — handled by scheduleReinit */ }
+}
+
+function scheduleReinit() {
+  if (_reinitScheduled) return;
+  _reinitScheduled = true;
+  // Poll until chrome.runtime.id is valid again (SW has restarted)
+  const poll = setInterval(async () => {
+    if (!chrome.runtime?.id) return; // still dead
+    clearInterval(poll);
+    _reinitScheduled = false;
+    connectPort();
+    // Remove stale overlay so the fresh one mounts cleanly
+    document.getElementById('ajah-overlay-host')?.remove();
+    document.getElementById('ajah-reopen-host')?.remove();
+    overlayDismissed = false;
+    await init();
+  }, 500);
+}
+
+connectPort();
+
 function getExtractor(platform) {
   switch (platform) {
     case 'linkedin':   return new LinkedInExtractor();
@@ -29,42 +67,48 @@ function getExtractor(platform) {
   }
 }
 
-(async function init() {
+async function init() {
   try {
+    // Bail out if running inside an iframe — only run on the top-level page
+    if (window !== window.top) return;
+
+    // Bail out if chrome.runtime is unavailable (sandboxed context)
+    if (!chrome.runtime?.id) return;
+
     const { detected, platform } = new JobDetector().detect(window.location.href);
     if (!detected) return;
 
     // Google Forms renders content dynamically — wait for it to settle
     if (platform === 'googleforms') {
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 2000));
     }
 
-    const jobDescription = getExtractor(platform).extract();
+    // Re-check after the wait — SW may have died during the delay
+    if (!chrome.runtime?.id) { scheduleReinit(); return; }
+
+    const extractor = getExtractor(platform);
+    const jobDescription = extractor.extractAsync
+      ? await extractor.extractAsync()
+      : extractor.extract();
+
     if (!jobDescription || (jobDescription.title === null && jobDescription.body === null)) return;
 
-    const authState = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, (res) => {
-        if (chrome.runtime.lastError) { resolve(null); return; }
-        resolve(res ?? null);
-      });
-    });
+    // Use wakeAndSend so context invalidation is handled gracefully
+    const authRes = await wakeAndSend({ type: 'GET_AUTH_STATE' });
+    if (authRes.error === '__CONTEXT_DEAD__') { scheduleReinit(); return; }
 
-    if (!authState || !authState.accessToken) {
+    // GET_AUTH_STATE returns { user, accessToken, tier } directly (not wrapped in data)
+    if (!authRes?.accessToken) {
       mountOverlay({ platform, jobDescription, formFiller: new FormFiller(),
         warnings: ['Please log in to save this job and use AI features.'] });
       return;
     }
 
-    const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        type: 'API_REQUEST',
-        endpoint: 'http://localhost:3000/job-descriptions',
-        method: 'POST',
-        body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5000) : null },
-      }, (res) => {
-        if (chrome.runtime.lastError) { resolve({ data: null, error: chrome.runtime.lastError.message }); return; }
-        resolve(res ?? { data: null, error: 'No response' });
-      });
+    const response = await wakeAndSend({
+      type: 'API_REQUEST',
+      endpoint: 'http://localhost:3000/job-descriptions',
+      method: 'POST',
+      body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5000) : null },
     });
 
     if (response?.data?.id) jobDescription.id = response.data.id;
@@ -72,9 +116,17 @@ function getExtractor(platform) {
     const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(', ')}`] : [];
     mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
   } catch (err) {
-    console.error('[content.js] init error:', err);
+    const msg = (err?.message ?? '').toLowerCase();
+    if (msg.includes('context invalidated') || msg.includes('context invalid')) {
+      // SW died mid-init — schedule reinit instead of showing an error
+      scheduleReinit();
+      return;
+    }
+    console.error('[content.js] init error:', err?.message ?? err, err?.stack ?? '');
   }
-})();
+}
+
+init();
 
 function scoreColor(score) {
   if (score >= 70) return '#4ade80';
@@ -172,16 +224,9 @@ async function wakeAndSend(message) {
   return { data: null, error: '__CONTEXT_DEAD__', status: 0 };
 }
 
-/** Renders a "please refresh" message with a button in the given element */
-function showRefreshPrompt(el) {
-  el.innerHTML = `
-    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:600;color:#fca5a5;line-height:1.5;">
-      ⚠ The extension was reloaded. Please refresh this page to reconnect.
-      <br><br>
-      <button id="ajah-refresh-btn" style="padding:6px 14px;background:rgba(99,102,241,0.6);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;">↺ Refresh Page</button>
-    </div>`;
-  const btn = el.querySelector('#ajah-refresh-btn');
-  if (btn) btn.addEventListener('click', () => window.location.reload());
+/** Silently logs context death — reinit is handled by the port monitor above */
+function showRefreshPrompt(_el) {
+  console.warn('[AJAH] Extension context lost — reinitializing…');
 }
 function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   if (document.getElementById('ajah-overlay-host')) return;
@@ -364,7 +409,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
       autofillBtn.disabled = false; autofillBtn.textContent = 'Autofill';
       if (res.error === '__CONTEXT_DEAD__') { showRefreshPrompt(autofillOut); return; }
       if (!res || !res.data) { autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? 'Could not load resume data.')}</span>`; return; }
-      const { filled, manualReview } = formFiller.fillAll(res.data, document);
+      const { filled, manualReview } = await formFiller.fillAll(res.data, document);
       autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">✓ ${filled} filled</span><span style="color:var(--tm);"> · ${manualReview} highlighted</span>`;
     } catch {
       autofillBtn.disabled = false; autofillBtn.textContent = 'Autofill';

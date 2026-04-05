@@ -87,8 +87,10 @@
         return { detected: false, platform: null };
       }
       const { hostname, pathname, search } = parsed;
-      if (hostname.includes("linkedin.com") && pathname.includes("/jobs/view/")) {
-        return { detected: true, platform: "linkedin" };
+      if (hostname.includes("linkedin.com")) {
+        if (pathname.includes("/jobs/view/") || pathname.includes("/jobs/") && new URLSearchParams(search).has("currentJobId")) {
+          return { detected: true, platform: "linkedin" };
+        }
       }
       if (hostname.includes("indeed.com") && (pathname.includes("/viewjob") || search.includes("/viewjob"))) {
         return { detected: true, platform: "indeed" };
@@ -617,126 +619,308 @@
   };
 
   // src/formFiller.js
-  var EXCLUDED_INPUT_TYPES = /* @__PURE__ */ new Set(["hidden", "submit", "button", "reset", "image"]);
+  var EXCLUDED_INPUT_TYPES = /* @__PURE__ */ new Set([
+    "hidden",
+    "submit",
+    "button",
+    "reset",
+    "image",
+    "file",
+    "color",
+    "range"
+  ]);
   var RESUME_FIELD_KEYWORDS = {
-    name: ["name", "full name", "fullname", "your name"],
-    firstName: ["first name", "firstname", "first", "given name"],
-    lastName: ["last name", "lastname", "last", "surname", "family name"],
-    email: ["email", "e-mail", "email address"],
-    phone: ["phone", "telephone", "mobile", "cell", "contact number"],
-    address: ["address", "street", "city", "location", "zip", "postal"]
+    // Contact
+    name: ["full name", "fullname", "your name", "applicant name", "candidate name"],
+    firstName: ["first name", "firstname", "given name", "forename", "first"],
+    lastName: ["last name", "lastname", "surname", "family name", "last"],
+    email: ["email", "e-mail", "email address", "work email"],
+    phone: ["phone", "telephone", "mobile", "cell", "contact number", "phone number"],
+    address: ["address", "street address", "mailing address", "street"],
+    city: ["city", "town"],
+    state: ["state", "province", "region"],
+    zip: ["zip", "postal code", "postcode", "zip code"],
+    country: ["country"],
+    linkedin: ["linkedin", "linkedin url", "linkedin profile", "linkedin.com"],
+    github: ["github", "github url", "github profile", "github.com"],
+    portfolio: ["portfolio", "website", "personal website", "personal url"],
+    // Professional
+    currentTitle: ["current title", "job title", "current position", "current role", "position title", "title"],
+    currentCompany: ["current company", "current employer", "employer", "company name", "company"],
+    yearsExperience: ["years of experience", "years experience", "total experience", "experience years", "years"],
+    skills: ["skills", "key skills", "technical skills", "core skills", "competencies"],
+    summary: ["summary", "professional summary", "about you", "about me", "bio", "profile", "objective", "career objective"],
+    coverLetter: ["cover letter", "covering letter", "motivation", "why do you want", "why are you interested", "tell us about yourself", "additional information", "additional comments", "anything else"],
+    // Education
+    degree: ["degree", "highest degree", "highest education", "education level", "qualification"],
+    institution: ["university", "college", "school", "institution", "alma mater"],
+    graduationYear: ["graduation year", "year of graduation", "graduated", "completion year"],
+    // Work
+    jobTitle: ["previous title", "last title", "most recent title", "recent job title"],
+    jobCompany: ["previous company", "last company", "most recent company", "recent employer"],
+    jobStartDate: ["start date", "from date", "employment start"],
+    jobEndDate: ["end date", "to date", "employment end"],
+    jobDescription: ["job description", "responsibilities", "duties", "role description"],
+    // Salary / Availability
+    salary: ["salary", "expected salary", "desired salary", "compensation", "salary expectation"],
+    availability: ["availability", "available from", "notice period", "when can you start"]
+  };
+  var AUTOCOMPLETE_MAP = {
+    "name": "name",
+    "given-name": "firstName",
+    "family-name": "lastName",
+    "email": "email",
+    "tel": "phone",
+    "tel-national": "phone",
+    "street-address": "address",
+    "address-line1": "address",
+    "address-level2": "city",
+    "address-level1": "state",
+    "postal-code": "zip",
+    "country": "country",
+    "country-name": "country",
+    "url": "portfolio",
+    "organization": "currentCompany",
+    "organization-title": "currentTitle"
   };
   function resolveLabel(el, root) {
     if (el.id) {
-      const associated = root.querySelector ? root.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
-      if (associated) return associated.textContent.trim();
+      const lbl = (root.getRootNode ? root.getRootNode({ composed: true }) : root).querySelector?.(`label[for="${CSS.escape(el.id)}"]`);
+      if (lbl) return lbl.textContent.trim();
     }
     const ancestor = el.closest("label");
     if (ancestor) return ancestor.textContent.trim();
+    if (el.getAttribute("aria-label")) return el.getAttribute("aria-label").trim();
+    if (el.getAttribute("aria-labelledby")) {
+      const ref = (el.getRootNode?.({ composed: true }) ?? document).getElementById?.(el.getAttribute("aria-labelledby"));
+      if (ref) return ref.textContent.trim();
+    }
+    if (el.title) return el.title.trim();
     return "";
   }
-  var FormFiller = class _FormFiller {
-    /**
-     * Scans the given root element for fillable form fields.
-     *
-     * @param {Document|Element} [rootElement=document]
-     * @returns {Array<{
-     *   element: HTMLElement,
-     *   type: 'input'|'textarea'|'select',
-     *   label: string,
-     *   placeholder: string,
-     *   name: string,
-     *   id: string,
-     *   currentValue: string
-     * }>}
-     */
-    scan(rootElement = document) {
-      const raw = rootElement.querySelectorAll("input, textarea, select");
-      const fields = [];
-      for (const el of raw) {
-        if (el.tagName.toLowerCase() === "input") {
-          const type2 = (el.type || "").toLowerCase();
-          if (EXCLUDED_INPUT_TYPES.has(type2)) continue;
+  function resolveNearbyText(el) {
+    const STOP_TAGS = /* @__PURE__ */ new Set(["FORM", "BODY", "HTML", "MAIN", "SECTION", "ARTICLE"]);
+    let node = el.parentElement;
+    for (let depth = 0; depth < 4 && node && !STOP_TAGS.has(node.tagName); depth++) {
+      for (const child of node.childNodes) {
+        if (child === el) continue;
+        if (child.nodeType === Node.TEXT_NODE) {
+          const t = child.textContent.trim();
+          if (t.length > 1 && t.length < 100) return t;
         }
-        if (el.disabled) continue;
-        const tagName = el.tagName.toLowerCase();
-        const type = tagName === "input" ? "input" : tagName === "textarea" ? "textarea" : "select";
-        const currentValue = el.value != null ? String(el.value) : "";
-        fields.push({
-          element: el,
-          type,
-          label: resolveLabel(el, rootElement),
-          placeholder: el.placeholder || "",
-          name: el.name || "",
-          id: el.id || "",
-          currentValue
-        });
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const tag = child.tagName;
+          if (["LABEL", "SPAN", "P", "LEGEND", "H1", "H2", "H3", "H4", "DT"].includes(tag)) {
+            const t = child.textContent.trim();
+            if (t.length > 1 && t.length < 100) return t;
+          }
+        }
       }
-      return fields;
+      node = node.parentElement;
+    }
+    return "";
+  }
+  function collectShadowFields(root, depth = 0) {
+    if (depth > 6) return [];
+    const results = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.shadowRoot) {
+        results.push(...collectShadowFields(node.shadowRoot, depth + 1));
+      }
+    }
+    root.querySelectorAll?.("input, textarea, select").forEach((el) => {
+      if (el.disabled || el.readOnly) return;
+      if (el.tagName === "INPUT" && EXCLUDED_INPUT_TYPES.has((el.type || "").toLowerCase())) return;
+      results.push(el);
+    });
+    return results;
+  }
+  function triggerInputEvents(el) {
+    ["input", "change", "blur"].forEach(
+      (type) => el.dispatchEvent(new Event(type, { bubbles: true }))
+    );
+  }
+  function setInputValue(el, value) {
+    const tag = el.tagName;
+    const proto = tag === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) {
+      setter.call(el, value);
+    } else {
+      el.value = value;
+    }
+    triggerInputEvents(el);
+  }
+  function setSelectValue(el, value) {
+    if (!value) return false;
+    const v = String(value).toLowerCase().trim();
+    for (const opt of el.options) {
+      if (opt.value.toLowerCase() === v || opt.textContent.trim().toLowerCase() === v) {
+        el.value = opt.value;
+        triggerInputEvents(el);
+        return true;
+      }
+    }
+    for (const opt of el.options) {
+      const ot = opt.textContent.trim().toLowerCase();
+      if (ot.includes(v) || v.includes(ot)) {
+        el.value = opt.value;
+        triggerInputEvents(el);
+        return true;
+      }
+    }
+    return false;
+  }
+  async function clipboardInject(el, value) {
+    try {
+      el.focus();
+      el.select?.();
+      await navigator.clipboard.writeText(value);
+      const pasted = document.execCommand("paste");
+      if (pasted) {
+        triggerInputEvents(el);
+        return true;
+      }
+    } catch {
+    }
+    setInputValue(el, value);
+    return true;
+  }
+  function scoreAgainstKeywords(combined) {
+    const c = combined.toLowerCase().replace(/[_\-]/g, " ").trim();
+    let best = { resumeField: null, confidence: 0 };
+    for (const [resumeField, keywords] of Object.entries(RESUME_FIELD_KEYWORDS)) {
+      for (const kw of keywords) {
+        let conf = 0;
+        if (c === kw) conf = 1;
+        else if (c.startsWith(kw + " ") || c.endsWith(" " + kw)) conf = 0.95;
+        else if (c.includes(kw)) conf = 0.85;
+        if (conf > best.confidence) best = { resumeField, confidence: conf };
+      }
+    }
+    return best;
+  }
+  var FormFiller = class _FormFiller {
+    // ── Strategy 1: keyword match on label/placeholder/name/id ────────────────
+    _strategy1(el) {
+      const label = resolveLabel(el, el.ownerDocument ?? document);
+      const combined = [label, el.placeholder || "", el.name || "", el.id || ""].join(" ");
+      return scoreAgainstKeywords(combined);
+    }
+    // ── Strategy 2: HTML autocomplete attribute ───────────────────────────────
+    _strategy2(el) {
+      const ac = (el.getAttribute("autocomplete") || "").toLowerCase().trim();
+      if (!ac || ac === "off" || ac === "on") return { resumeField: null, confidence: 0 };
+      const resumeField = AUTOCOMPLETE_MAP[ac] ?? null;
+      return resumeField ? { resumeField, confidence: 0.95 } : { resumeField: null, confidence: 0 };
+    }
+    // ── Strategy 3: data-* attributes ────────────────────────────────────────
+    _strategy3(el) {
+      const candidates = [
+        el.dataset.field,
+        el.dataset.label,
+        el.dataset.name,
+        el.dataset.key,
+        el.dataset.type,
+        el.dataset.inputType
+      ].filter(Boolean).join(" ");
+      if (!candidates) return { resumeField: null, confidence: 0 };
+      const result = scoreAgainstKeywords(candidates);
+      return result.confidence > 0 ? { ...result, confidence: result.confidence * 0.9 } : result;
+    }
+    // ── Strategy 4: nearest visible text heuristic ───────────────────────────
+    _strategy4(el) {
+      const nearby = resolveNearbyText(el);
+      if (!nearby) return { resumeField: null, confidence: 0 };
+      const result = scoreAgainstKeywords(nearby);
+      return result.confidence > 0 ? { ...result, confidence: result.confidence * 0.8 } : result;
+    }
+    // ── Strategy 5: shadow DOM (handled at scan time, same scoring) ───────────
+    // Shadow fields are collected in scan() and then go through strategies 1–4.
+    // This method is a no-op placeholder kept for clarity.
+    _strategy5() {
+      return { resumeField: null, confidence: 0 };
     }
     /**
-     * Scores how well a scanned field maps to a resume field.
-     *
-     * Combines label + placeholder + name into a single lowercase string, then
-     * checks each resume field's keywords for a match.
-     *
-     * Confidence levels:
-     *   - 1.0  exact keyword match (keyword === combined string, or combined === keyword)
-     *   - 0.85 partial match (keyword appears as a substring of combined)
-     *   - 0.0  no match
-     *
-     * Returns the highest-confidence match found, or `{ resumeField: null, confidence: 0 }`.
-     *
-     * @param {{ label: string, placeholder: string, name: string }} field
-     * @returns {{ resumeField: string|null, confidence: number }}
+     * Runs all strategies in order and returns the best result found.
+     * @param {HTMLElement} el
+     * @returns {{ resumeField: string|null, confidence: number, strategy: number }}
      */
-    scoreFieldMapping(field) {
-      const combined = [field.label, field.placeholder, field.name].join(" ").toLowerCase().trim();
-      let best = { resumeField: null, confidence: 0 };
-      for (const [resumeField, keywords] of Object.entries(RESUME_FIELD_KEYWORDS)) {
-        for (const keyword of keywords) {
-          const kw = keyword.toLowerCase();
-          let confidence = 0;
-          if (combined === kw) {
-            confidence = 1;
-          } else if (combined.includes(kw)) {
-            confidence = 0.85;
+    _runStrategies(el) {
+      const strategies = [
+        this._strategy1.bind(this),
+        this._strategy2.bind(this),
+        this._strategy3.bind(this),
+        this._strategy4.bind(this)
+      ];
+      let best = { resumeField: null, confidence: 0, strategy: 0 };
+      for (let i = 0; i < strategies.length; i++) {
+        try {
+          const result = strategies[i](el);
+          if (result.confidence > best.confidence) {
+            best = { ...result, strategy: i + 1 };
+            if (best.confidence >= 0.95) break;
           }
-          if (confidence > best.confidence) {
-            best = { resumeField, confidence };
-          }
+        } catch {
         }
       }
       return best;
     }
+    // ── Scan ──────────────────────────────────────────────────────────────────
     /**
-     * Maps an array of scanned fields to resume fields.
-     *
-     * @param {Array<object>} fields - output of scan()
-     * @returns {Array<{ field: object, resumeField: string, confidence: number }>}
-     *   Only fields with confidence > 0 are included.
+     * Scans root + all nested shadow roots for fillable fields.
+     * @param {Document|Element} rootElement
+     * @returns {Array<object>}
+     */
+    scan(rootElement = document) {
+      const fields = [];
+      const seen = /* @__PURE__ */ new WeakSet();
+      const processEl = (el) => {
+        if (seen.has(el)) return;
+        seen.add(el);
+        if (el.tagName === "INPUT") {
+          if (EXCLUDED_INPUT_TYPES.has((el.type || "").toLowerCase())) return;
+        }
+        if (el.disabled || el.readOnly) return;
+        const tagName = el.tagName.toLowerCase();
+        fields.push({
+          element: el,
+          type: tagName === "select" ? "select" : tagName === "textarea" ? "textarea" : "input",
+          inputType: tagName === "input" ? (el.type || "text").toLowerCase() : tagName,
+          label: resolveLabel(el, rootElement),
+          placeholder: el.placeholder || "",
+          name: el.name || "",
+          id: el.id || "",
+          currentValue: el.value != null ? String(el.value) : ""
+        });
+      };
+      rootElement.querySelectorAll("input, textarea, select").forEach(processEl);
+      collectShadowFields(rootElement).forEach(processEl);
+      return fields;
+    }
+    // ── Map ───────────────────────────────────────────────────────────────────
+    /**
+     * Runs all strategies on each field and returns mappings with confidence > 0.
      */
     mapFields(fields) {
-      const results = [];
-      for (const field of fields) {
-        const { resumeField, confidence } = this.scoreFieldMapping(field);
-        if (confidence > 0) {
-          results.push({ field, resumeField, confidence });
-        }
-      }
-      return results;
+      return fields.map((field) => {
+        const { resumeField, confidence, strategy } = this._runStrategies(field.element);
+        return confidence > 0 ? { field, resumeField, confidence, strategy } : null;
+      }).filter(Boolean);
     }
+    // ── Fill ──────────────────────────────────────────────────────────────────
     /**
-     * Fills form fields based on mapped field data and resume data.
-     *
-     * - Skips pre-filled fields (never overwrites existing values)
-     * - confidence >= 0.8: auto-populates the field value
-     * - confidence > 0 and < 0.8: highlights the field with a yellow border
-     *   and sets a data-ajah-suggestion attribute with the suggested value
+     * Fills mapped fields from resumeData.
+     * - confidence >= 0.8  → auto-fill immediately
+     * - 0.5–0.8            → auto-fill but mark with blue outline (lower certainty)
+     * - < 0.5              → highlight yellow + set data-ajah-suggestion (manual review)
+     * - Never overwrites pre-filled fields
      * - Never submits the form
      *
-     * @param {Array<{ field: object, resumeField: string, confidence: number }>} mappedFields - output of mapFields()
-     * @param {object} resumeData - key/value map of resume field names to values
+     * @param {Array<object>} mappedFields
+     * @param {object} resumeData
      * @returns {{ filled: number, manualReview: number }}
      */
     fill(mappedFields, resumeData) {
@@ -745,23 +929,147 @@
       for (const { field, resumeField, confidence } of mappedFields) {
         if (_FormFiller.isPreFilled(field)) continue;
         const value = resumeData[resumeField];
-        if (value == null) continue;
-        if (confidence >= 0.8) {
-          field.element.value = value;
-          filled++;
-        } else if (confidence > 0) {
-          field.element.style.border = "2px solid #fbbf24";
-          field.element.setAttribute("data-ajah-suggestion", value);
+        if (value == null || value === "") continue;
+        if (confidence >= 0.5) {
+          let ok = false;
+          if (field.type === "select") {
+            ok = setSelectValue(field.element, value);
+          } else if (field.inputType === "checkbox") {
+            field.element.checked = Boolean(value);
+            triggerInputEvents(field.element);
+            ok = true;
+          } else if (field.inputType === "radio") {
+            if (field.element.value.toLowerCase() === String(value).toLowerCase()) {
+              field.element.checked = true;
+              triggerInputEvents(field.element);
+              ok = true;
+            }
+          } else {
+            setInputValue(field.element, String(value));
+            ok = true;
+          }
+          if (ok) {
+            field.element.style.outline = confidence >= 0.8 ? "2px solid rgba(74,222,128,0.6)" : "2px solid rgba(96,165,250,0.6)";
+            filled++;
+          } else {
+            field.element.style.outline = "2px solid #fbbf24";
+            field.element.setAttribute("data-ajah-suggestion", String(value));
+            manualReview++;
+          }
+        } else {
+          field.element.style.outline = "2px solid #fbbf24";
+          field.element.setAttribute("data-ajah-suggestion", String(value));
           manualReview++;
         }
       }
       return { filled, manualReview };
     }
     /**
-     * Returns true if the field descriptor has a non-empty current value.
-     * @param {{ currentValue: string }} field
-     * @returns {boolean}
+     * Strategy 6 — clipboard injection pass.
+     * Runs after fill() on any fields that still have data-ajah-suggestion set
+     * and are still empty. Tries to paste the suggestion value.
+     *
+     * @param {Document|Element} root
+     * @returns {Promise<number>} number of additional fields filled
      */
+    async fillWithClipboard(root = document) {
+      const suggestions = [
+        ...root.querySelectorAll("[data-ajah-suggestion]"),
+        // Also check shadow roots
+        ...collectShadowFields(root).filter((el) => el.hasAttribute?.("data-ajah-suggestion"))
+      ];
+      let extra = 0;
+      for (const el of suggestions) {
+        if (el.value && el.value.trim() !== "") continue;
+        const value = el.getAttribute("data-ajah-suggestion");
+        if (!value) continue;
+        try {
+          await clipboardInject(el, value);
+          el.removeAttribute("data-ajah-suggestion");
+          el.style.outline = "2px solid rgba(96,165,250,0.6)";
+          extra++;
+        } catch {
+        }
+      }
+      return extra;
+    }
+    // ── High-level entry point ────────────────────────────────────────────────
+    /**
+     * Runs all strategies and fills the form.
+     * After the main fill pass, runs a clipboard injection pass on any
+     * remaining unfilled suggestions.
+     *
+     * @param {object} apiResume  — response.data from GET /resumes/me
+     * @param {Document|Element} root
+     * @returns {Promise<{ filled: number, manualReview: number }>}
+     */
+    async fillAll(apiResume, root = document) {
+      const resumeData = _FormFiller.buildResumeData(apiResume);
+      const fields = this.scan(root);
+      const mapped = this.mapFields(fields);
+      const { filled, manualReview } = this.fill(mapped, resumeData);
+      const extra = await this.fillWithClipboard(root);
+      return { filled: filled + extra, manualReview: Math.max(0, manualReview - extra) };
+    }
+    // ── Resume data builder ───────────────────────────────────────────────────
+    /**
+     * Flattens the /resumes/me API response into a key→value map.
+     */
+    static buildResumeData(resume) {
+      const pd = resume?.parsedData ?? resume ?? {};
+      const work = Array.isArray(pd.workExperience) ? pd.workExperience : [];
+      const edu = Array.isArray(pd.education) ? pd.education : [];
+      const most = work[0] ?? {};
+      const latestEdu = edu[0] ?? {};
+      const skillsStr = Array.isArray(pd.skills) ? pd.skills.join(", ") : pd.skills ?? "";
+      let yearsExp = pd.yearsOfExperience ?? "";
+      if (!yearsExp && work.length > 0) {
+        let totalMonths = 0;
+        const now = /* @__PURE__ */ new Date();
+        for (const entry of work) {
+          try {
+            const start = new Date(entry.startDate);
+            const end = entry.endDate ? new Date(entry.endDate) : now;
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end >= start) {
+              totalMonths += (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+            }
+          } catch {
+          }
+        }
+        yearsExp = totalMonths > 0 ? String(Math.round(totalMonths / 12)) : "";
+      }
+      return {
+        name: pd.name ?? "",
+        firstName: pd.firstName ?? (pd.name ?? "").split(" ")[0] ?? "",
+        lastName: pd.lastName ?? (pd.name ?? "").split(" ").slice(1).join(" ") ?? "",
+        email: pd.email ?? "",
+        phone: pd.phone ?? "",
+        address: pd.address ?? "",
+        city: pd.city ?? "",
+        state: pd.state ?? "",
+        zip: pd.zip ?? "",
+        country: pd.country ?? "",
+        linkedin: pd.linkedin ?? "",
+        github: pd.github ?? "",
+        portfolio: pd.portfolio ?? pd.website ?? "",
+        currentTitle: most.title ?? pd.currentTitle ?? "",
+        currentCompany: most.company ?? pd.currentCompany ?? "",
+        yearsExperience: yearsExp,
+        skills: skillsStr,
+        summary: pd.summary ?? pd.objective ?? "",
+        coverLetter: pd.coverLetter ?? "",
+        degree: latestEdu.degree ?? (Array.isArray(pd.degree) ? pd.degree[0] : pd.degree) ?? "",
+        institution: latestEdu.institution ?? pd.institution ?? "",
+        graduationYear: latestEdu.graduationYear ?? pd.graduationYear ?? "",
+        jobTitle: most.title ?? "",
+        jobCompany: most.company ?? "",
+        jobStartDate: most.startDate ?? "",
+        jobEndDate: most.endDate ?? "",
+        jobDescription: most.description ?? "",
+        salary: pd.expectedSalary ?? pd.salary ?? "",
+        availability: pd.availability ?? pd.noticePeriod ?? ""
+      };
+    }
     static isPreFilled(field) {
       return field.currentValue !== "" && field.currentValue != null;
     }
@@ -769,6 +1077,34 @@
 
   // src/content.js
   var overlayDismissed = false;
+  var _port = null;
+  var _reinitScheduled = false;
+  function connectPort() {
+    try {
+      _port = chrome.runtime.connect({ name: "ajah-keepalive" });
+      _port.onDisconnect.addListener(() => {
+        _port = null;
+        void chrome.runtime.lastError;
+        scheduleReinit();
+      });
+    } catch {
+    }
+  }
+  function scheduleReinit() {
+    if (_reinitScheduled) return;
+    _reinitScheduled = true;
+    const poll = setInterval(async () => {
+      if (!chrome.runtime?.id) return;
+      clearInterval(poll);
+      _reinitScheduled = false;
+      connectPort();
+      document.getElementById("ajah-overlay-host")?.remove();
+      document.getElementById("ajah-reopen-host")?.remove();
+      overlayDismissed = false;
+      await init();
+    }, 500);
+  }
+  connectPort();
   function getExtractor(platform) {
     switch (platform) {
       case "linkedin":
@@ -791,25 +1127,28 @@
         return { extract: () => genericExtract(platform) };
     }
   }
-  (async function init() {
+  async function init() {
     try {
+      if (window !== window.top) return;
+      if (!chrome.runtime?.id) return;
       const { detected, platform } = new JobDetector().detect(window.location.href);
       if (!detected) return;
       if (platform === "googleforms") {
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 2e3));
       }
-      const jobDescription = getExtractor(platform).extract();
+      if (!chrome.runtime?.id) {
+        scheduleReinit();
+        return;
+      }
+      const extractor = getExtractor(platform);
+      const jobDescription = extractor.extractAsync ? await extractor.extractAsync() : extractor.extract();
       if (!jobDescription || jobDescription.title === null && jobDescription.body === null) return;
-      const authState = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
-          if (chrome.runtime.lastError) {
-            resolve(null);
-            return;
-          }
-          resolve(res ?? null);
-        });
-      });
-      if (!authState || !authState.accessToken) {
+      const authRes = await wakeAndSend({ type: "GET_AUTH_STATE" });
+      if (authRes.error === "__CONTEXT_DEAD__") {
+        scheduleReinit();
+        return;
+      }
+      if (!authRes?.accessToken) {
         mountOverlay({
           platform,
           jobDescription,
@@ -818,28 +1157,26 @@
         });
         return;
       }
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          type: "API_REQUEST",
-          endpoint: "http://localhost:3000/job-descriptions",
-          method: "POST",
-          body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null }
-        }, (res) => {
-          if (chrome.runtime.lastError) {
-            resolve({ data: null, error: chrome.runtime.lastError.message });
-            return;
-          }
-          resolve(res ?? { data: null, error: "No response" });
-        });
+      const response = await wakeAndSend({
+        type: "API_REQUEST",
+        endpoint: "http://localhost:3000/job-descriptions",
+        method: "POST",
+        body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null }
       });
       if (response?.data?.id) jobDescription.id = response.data.id;
       const missingFields = JDExtractorBase.getMissingFields(jobDescription);
       const warnings = missingFields.length > 0 ? [`Missing fields: ${missingFields.join(", ")}`] : [];
       mountOverlay({ platform, jobDescription, formFiller: new FormFiller(), warnings });
     } catch (err) {
-      console.error("[content.js] init error:", err);
+      const msg = (err?.message ?? "").toLowerCase();
+      if (msg.includes("context invalidated") || msg.includes("context invalid")) {
+        scheduleReinit();
+        return;
+      }
+      console.error("[content.js] init error:", err?.message ?? err, err?.stack ?? "");
     }
-  })();
+  }
+  init();
   function scoreColor(score) {
     if (score >= 70) return "#4ade80";
     if (score >= 40) return "#fbbf24";
@@ -908,15 +1245,8 @@
     }
     return { data: null, error: "__CONTEXT_DEAD__", status: 0 };
   }
-  function showRefreshPrompt(el) {
-    el.innerHTML = `
-    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:600;color:#fca5a5;line-height:1.5;">
-      \u26A0 The extension was reloaded. Please refresh this page to reconnect.
-      <br><br>
-      <button id="ajah-refresh-btn" style="padding:6px 14px;background:rgba(99,102,241,0.6);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;">\u21BA Refresh Page</button>
-    </div>`;
-    const btn = el.querySelector("#ajah-refresh-btn");
-    if (btn) btn.addEventListener("click", () => window.location.reload());
+  function showRefreshPrompt(_el) {
+    console.warn("[AJAH] Extension context lost \u2014 reinitializing\u2026");
   }
   function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     if (document.getElementById("ajah-overlay-host")) return;
@@ -1087,7 +1417,7 @@
           autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? "Could not load resume data.")}</span>`;
           return;
         }
-        const { filled, manualReview } = formFiller.fillAll(res.data, document);
+        const { filled, manualReview } = await formFiller.fillAll(res.data, document);
         autofillOut.innerHTML = `<span style="color:#4ade80;font-weight:700;">\u2713 ${filled} filled</span><span style="color:var(--tm);"> \xB7 ${manualReview} highlighted</span>`;
       } catch {
         autofillBtn.disabled = false;

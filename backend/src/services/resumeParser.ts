@@ -27,6 +27,14 @@ export interface ParsedResume {
   email: string;
   phone: string;
   address: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  linkedin: string;
+  github: string;
+  portfolio: string;
+  summary: string;
   skills: string[];
   workExperience: WorkEntry[];
   education: EducationEntry[];
@@ -375,6 +383,35 @@ function parseText(text: string, noOfPages = 1): ParsedResume {
   const phoneMatch = normalised.match(/(?:\+?\d{1,3}[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}/);
   const phone = phoneMatch ? phoneMatch[0].trim() : '';
 
+  // LinkedIn URL
+  const linkedinMatch = normalised.match(/(?:linkedin\.com\/in\/)([\w\-]+)/i);
+  const linkedin = linkedinMatch ? `https://linkedin.com/in/${linkedinMatch[1]}` : '';
+
+  // GitHub URL
+  const githubMatch = normalised.match(/(?:github\.com\/)([\w\-]+)/i);
+  const github = githubMatch ? `https://github.com/${githubMatch[1]}` : '';
+
+  // Portfolio / personal website (any http/https URL that isn't linkedin/github)
+  const urlMatches = normalised.match(/https?:\/\/[^\s,<>"]+/gi) ?? [];
+  const portfolio = urlMatches.find(
+    (u) => !u.includes('linkedin.com') && !u.includes('github.com')
+  ) ?? '';
+
+  // Summary / objective section
+  const summaryMatch = normalised.match(
+    /(?:summary|objective|profile|about me)[:\s]*\n([\s\S]*?)(?:\n\n|\n[A-Z][a-zA-Z ]+:|\n[A-Z][a-zA-Z ]+\n|$)/i
+  );
+  const summary = summaryMatch ? summaryMatch[1].replace(/\n/g, ' ').trim() : '';
+
+  // City / State / Zip — look for patterns like "New York, NY 10001" or "London, UK"
+  let city = '', state = '', zip = '', country = '';
+  const locationMatch = normalised.match(/([A-Za-z][A-Za-z\s]{1,30}),\s*([A-Za-z]{2,20})\s*(\d{4,6}(?:-\d{4})?)?/);
+  if (locationMatch) {
+    city  = locationMatch[1].trim();
+    state = locationMatch[2].trim();
+    zip   = locationMatch[3]?.trim() ?? '';
+  }
+
   const skills = extractSkills(normalised);
   const workExperience = extractWorkExperience(normalised);
   const education = extractEducation(normalised);
@@ -390,6 +427,14 @@ function parseText(text: string, noOfPages = 1): ParsedResume {
     email,
     phone,
     address: '',
+    city,
+    state,
+    zip,
+    country,
+    linkedin,
+    github,
+    portfolio,
+    summary,
     skills,
     workExperience,
     education,

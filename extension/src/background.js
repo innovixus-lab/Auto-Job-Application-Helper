@@ -91,6 +91,54 @@ function swKeepalive() {
   return interval;
 }
 
+// ── Auto-reconnect on install / update ───────────────────────────────────────
+// When the extension is reloaded or updated, existing content scripts lose their
+// connection. Re-inject into all matching open tabs so users don't need to refresh.
+
+const CONTENT_SCRIPT_MATCHES = [
+  'https://www.linkedin.com/jobs/*',
+  'https://www.indeed.com/viewjob*',
+  'https://boards.greenhouse.io/*',
+  'https://jobs.lever.co/*',
+  'https://*.myworkdayjobs.com/*',
+  'https://*.icims.com/jobs/*',
+  'https://docs.google.com/forms/*',
+  'https://*.typeform.com/*',
+];
+
+async function reInjectContentScripts() {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (!tab.url || !tab.id) continue;
+    const matches = CONTENT_SCRIPT_MATCHES.some((pattern) => {
+      // Convert glob pattern to regex
+      const re = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+      return re.test(tab.url);
+    });
+    if (!matches) continue;
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['src/content.bundle.js'],
+        injectImmediately: false,
+      });
+    } catch { /* tab may be loading or restricted — skip */ }
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => reInjectContentScripts());
+chrome.runtime.onStartup.addListener(() => reInjectContentScripts());
+
+// ── Port-based connection for context health detection ────────────────────────
+// Content scripts connect a port on load. If the SW restarts, existing ports
+// disconnect — the content script detects this and reinitializes itself.
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'ajah-keepalive') return;
+  // Keep port alive; disconnect is handled on the content script side
+  port.onDisconnect.addListener(() => { void chrome.runtime.lastError; });
+});
+
 // ── Tab update listener ──────────────────────────────────────────────────────
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {

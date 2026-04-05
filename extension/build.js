@@ -8,13 +8,13 @@ async function build() {
   await esbuild.build({
     entryPoints: ['src/content.js'],
     bundle: true,
-    outfile: 'dist/content.bundle.js',
+    outfile: 'src/content.bundle.js',
     format: 'iife',
     target: 'chrome100',
     platform: 'browser',
   });
 
-  console.log('Bundled content.js → dist/content.bundle.js');
+  console.log('Bundled content.js → src/content.bundle.js');
 
   // Package extension
   const output = fs.createWriteStream(path.join(__dirname, 'extension-dist.zip'));
@@ -30,13 +30,12 @@ async function build() {
   archive.directory('icons/', 'icons');
   archive.directory('popup/', 'popup');
 
-  // Include all src files EXCEPT content.js (replaced by bundle)
+  // Include all src files EXCEPT the unbundled content.js source
   archive.glob('src/**/*', {
     ignore: ['src/__tests__/**', 'src/content.js'],
   });
 
-  // Use the bundled content script
-  archive.file('dist/content.bundle.js', { name: 'src/content.js' });
+  // The bundled content script is already at src/content.bundle.js
   archive.file('manifest.json', { name: 'manifest.json' });
 
   await archive.finalize();

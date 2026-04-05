@@ -103,8 +103,13 @@ export class JobDetector {
 
     const { hostname, pathname, search } = parsed;
 
-    if (hostname.includes('linkedin.com') && pathname.includes('/jobs/view/')) {
-      return { detected: true, platform: 'linkedin' };
+    if (hostname.includes('linkedin.com')) {
+      if (
+        pathname.includes('/jobs/view/') ||
+        (pathname.includes('/jobs/') && new URLSearchParams(search).has('currentJobId'))
+      ) {
+        return { detected: true, platform: 'linkedin' };
+      }
     }
     if (hostname.includes('indeed.com') && (pathname.includes('/viewjob') || search.includes('/viewjob'))) {
       return { detected: true, platform: 'indeed' };
