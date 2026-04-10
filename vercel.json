@@ -1,15 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "backend/api/index.ts",
-      "use": "@vercel/node"
+  "functions": {
+    "backend/api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 60
     }
-  ],
+  },
   "rewrites": [
-    {
-      "source": "/:path*",
-      "destination": "/backend/api/index.ts"
-    }
+    { "source": "/(.*)", "destination": "/backend/api/index.ts" }
   ]
 }
