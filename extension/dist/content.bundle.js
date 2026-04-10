@@ -821,7 +821,7 @@
       const response = await new Promise((resolve) => {
         chrome.runtime.sendMessage({
           type: "API_REQUEST",
-          endpoint: "http://localhost:3000/job-descriptions",
+          endpoint: "${API_BASE_URL}/job-descriptions",
           method: "POST",
           body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5e3) : null }
         }, (res) => {
@@ -1076,7 +1076,7 @@
       autofillBtn.textContent = "Filling\u2026";
       autofillOut.textContent = "";
       try {
-        const res = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        const res = await wakeAndSend({ type: "API_REQUEST", endpoint: "${API_BASE_URL}/resumes/me", method: "GET" });
         autofillBtn.disabled = false;
         autofillBtn.textContent = "Autofill";
         if (res.error === "__CONTEXT_DEAD__") {
@@ -1107,7 +1107,7 @@
       genBtn.textContent = "Generating\u2026";
       clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
       try {
-        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "${API_BASE_URL}/resumes/me", method: "GET" });
         if (rRes.error === "__CONTEXT_DEAD__") {
           genBtn.disabled = false;
           genBtn.textContent = "Cover Letter";
@@ -1168,7 +1168,7 @@
       answersBtn.textContent = "Generating\u2026";
       answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait\u2026</p>';
       try {
-        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "${API_BASE_URL}/resumes/me", method: "GET" });
         if (rRes.error === "__CONTEXT_DEAD__") {
           answersBtn.disabled = false;
           answersBtn.textContent = "Gen Answers";
@@ -1265,7 +1265,7 @@
       resumeBtn.textContent = "\u23F3 Generating\u2026";
       resumeOut.innerHTML = '<p style="color:var(--tm);font-size:11px;margin:0;">Analysing job and building your ATS resume\u2026</p>';
       try {
-        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "http://localhost:3000/resumes/me", method: "GET" });
+        const rRes = await wakeAndSend({ type: "API_REQUEST", endpoint: "${API_BASE_URL}/resumes/me", method: "GET" });
         if (!rRes.data?.id) {
           resumeBtn.disabled = false;
           resumeBtn.textContent = "\u{1F4C4} Generate ATS Resume (LaTeX)";

@@ -17,7 +17,12 @@ WORKDIR /app
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+COPY migrations ./migrations
+
+# Create uploads directory
+RUN mkdir -p uploads
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+# Run migrations then start the server
+CMD ["sh", "-c", "node dist/db/migrate.js && node dist/index.js"]
