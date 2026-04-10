@@ -13,6 +13,21 @@ import { envelope } from './middleware/envelope';
 
 const app = express();
 
+// CORS — allow requests from Chrome extensions and any origin
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (_req.method === 'OPTIONS') { res.sendStatus(204); return; }
+  next();
+});
+
+// Debug: log the actual path Vercel forwards
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  console.log(`[${req.method}] ${req.path} | originalUrl: ${req.originalUrl}`);
+  next();
+});
+
 // Stripe webhook must be mounted BEFORE express.json() to receive raw body
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeRouter);
 
