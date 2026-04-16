@@ -29,7 +29,10 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 });
 
 // Stripe webhook must be mounted BEFORE express.json() to receive raw body
-app.use('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+// Only mount if Stripe is configured (avoids crash on Vercel when key is placeholder)
+if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_test_...')) {
+  app.use('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+}
 
 // Request logging — early, before routes (but after stripe webhook)
 app.use(requestLogger);

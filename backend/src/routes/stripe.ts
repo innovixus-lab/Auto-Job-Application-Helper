@@ -4,7 +4,14 @@ import pool from '../db/pool';
 
 const router = Router();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+// Lazy-initialize Stripe to avoid crash when STRIPE_SECRET_KEY is not set
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key || key.startsWith('sk_test_...')) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(key, { apiVersion: '2023-10-16' });
+}
 
 async function upgradeUser(email: string): Promise<void> {
   await pool.query("UPDATE users SET tier = 'premium' WHERE email = $1", [email]);
@@ -20,7 +27,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+    event = getStripe().webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch {
     res.status(400).json({ error: 'Invalid signature' });
     return;
@@ -37,21 +44,21 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
-        const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
         if (customer.email) await upgradeUser(customer.email);
         break;
       }
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
-        const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
         if (customer.email) await downgradeUser(customer.email);
         break;
       }
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
-        const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
         if (customer.email) await downgradeUser(customer.email);
         break;
       }
