@@ -1,5 +1,4 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
 import mammoth from 'mammoth';
 
 export interface WorkEntry {
@@ -451,6 +450,10 @@ function parseText(text: string, noOfPages = 1): ParsedResume {
 }
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedResume> {
+  // Lazy-load pdf-parse to avoid Vercel serverless startup crash
+  // (pdf-parse reads test files at module load time which fails on read-only FS)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
   const result = await pdfParse(buffer);
   return parseText(result.text, result.numpages ?? 1);
 }
