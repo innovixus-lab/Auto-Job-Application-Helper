@@ -1,22 +1,21 @@
-import type { IncomingMessage, ServerResponse } from 'http';
+// Vercel serverless entry point
+// Validates env vars and exports the Express app as the default handler
 
-// Validate required env vars before importing the app
-// (missing vars cause pg pool to crash with an unhelpful error)
 const REQUIRED = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
-const missing = REQUIRED.filter(k => !process.env[k]);
+const missing = REQUIRED.filter((k) => !process.env[k]);
 
 if (missing.length > 0) {
-  // Export a simple handler that explains the problem
-  module.exports = (_req: IncomingMessage, res: ServerResponse) => {
+  const handler = (_req: any, res: any) => {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       data: null,
-      error: `Missing environment variables: ${missing.join(', ')}. Set them in Vercel dashboard → Settings → Environment Variables.`,
+      error: `Missing environment variables: ${missing.join(', ')}. Add them in Vercel → Settings → Environment Variables.`,
       status: 500,
     }));
   };
+  module.exports = handler;
 } else {
-  // All env vars present — load the full Express app
-  const { default: app } = require('../backend/src/app');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const app = require('../backend/src/app').default;
   module.exports = app;
 }
