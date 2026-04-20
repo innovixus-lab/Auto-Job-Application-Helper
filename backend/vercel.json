@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": null,
   "functions": {
     "api/index.ts": {
       "memory": 1024,
