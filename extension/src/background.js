@@ -4,8 +4,8 @@
  */
 
 // ── API base URL — change this to your production URL before release ──────────
-const API_BASE_URL = 'https://joby-psi.vercel.app';
-// const API_BASE_URL = '${API_BASE_URL}'; // local dev
+const API_BASE_URL = 'https://auto-job-helper-backend.onrender.com';
+// const API_BASE_URL = 'http://localhost:3000'; // local dev
 
 // ── JobDetector (inlined — cannot use ES module imports in MV3 service worker) ─
 
@@ -378,8 +378,7 @@ async function handleUploadResume({ fileData, filename, mimetype }, sendResponse
 async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-    const BASE_URL = '${API_BASE_URL}';
-    const response = await fetch(`${BASE_URL}/generate/cover-letter`, {
+    const response = await fetch(`${API_BASE_URL}/generate/cover-letter`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -400,8 +399,7 @@ async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendRes
 async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-    const BASE_URL = '${API_BASE_URL}';
-    const response = await fetch(`${BASE_URL}/generate/answers`, {
+    const response = await fetch(`${API_BASE_URL}/generate/answers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -422,8 +420,7 @@ async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, 
 async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterText }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-    const BASE_URL = '${API_BASE_URL}';
-    const response = await fetch(`${BASE_URL}/applications`, {
+    const response = await fetch(`${API_BASE_URL}/applications`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -447,7 +444,7 @@ async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterTe
 async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-    const response = await fetch('${API_BASE_URL}/generate/resume-latex', {
+    const response = await fetch(`${API_BASE_URL}/generate/resume-latex`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -463,7 +460,7 @@ async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendRes
 }
 
 // ── Auth handlers ────────────────────────────────────────────────────────────
-const BASE_URL = '${API_BASE_URL}';
+const BASE_URL = API_BASE_URL;
 
 async function handleRegister({ email, password }, sendResponse) {
   try {

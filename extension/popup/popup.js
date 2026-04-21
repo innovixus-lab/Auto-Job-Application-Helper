@@ -3,6 +3,9 @@
  * Handles popup UI state: auth status, tier display, and navigation.
  */
 
+// ── API Configuration ────────────────────────────────────────────────────────
+const API_BASE_URL = 'https://auto-job-helper-backend.onrender.com';
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initPopup();
@@ -98,7 +101,7 @@ async function renderUsage(tier) {
 
   const response = await new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/usage/me', method: 'GET' },
+      { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/usage/me`, method: 'GET' },
       (res) => resolve(res ?? { data: null, error: 'No response' })
     );
   });
@@ -244,7 +247,7 @@ async function loadDashboard(page) {
     chrome.runtime.sendMessage(
       {
         type: 'API_REQUEST',
-        endpoint: `https://joby-psi.vercel.app/applications?page=${page}&limit=10`,
+        endpoint: `${API_BASE_URL}/applications?page=${page}&limit=10`,
         method: 'GET',
       },
       (res) => resolve(res ?? { data: null, error: 'No response' })
@@ -313,7 +316,7 @@ async function loadDashboard(page) {
         chrome.runtime.sendMessage(
           {
             type: 'API_REQUEST',
-            endpoint: `https://joby-psi.vercel.app/applications/${app.id}`,
+            endpoint: `${API_BASE_URL}/applications/${app.id}`,
             method: 'PATCH',
             body: { status },
           },
@@ -342,7 +345,7 @@ async function loadExistingResume() {
 
   const response = await new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' },
+      { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' },
       (res) => resolve(res ?? { data: null, error: 'No response' })
     );
   });
@@ -384,7 +387,7 @@ function bindNavigation({ user, tier }) {
 
     const res = await new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' },
+        { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' },
         (r) => resolve(r ?? { data: null, error: 'No response' })
       );
     });
@@ -470,7 +473,7 @@ function bindNavigation({ user, tier }) {
 
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/auth/password-reset/confirm', method: 'POST', body: { currentPassword, newPassword } },
+        { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/auth/password-reset/confirm`, method: 'POST', body: { currentPassword, newPassword } },
         (res) => resolve(res ?? { error: 'No response' })
       );
     });
@@ -517,7 +520,7 @@ function bindNavigation({ user, tier }) {
           if (response?.data?.name) {
             // Fetch full parsed data then open edit form
             chrome.runtime.sendMessage(
-              { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' },
+              { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' },
               (res) => {
                 if (res?.data?.parsedData) {
                   populateResumeEditForm(res.data.parsedData);
@@ -596,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Get resume id
     const resumeRes = await new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' },
+        { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' },
         (res) => resolve(res ?? { data: null, error: 'No response' })
       );
     });
@@ -623,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage(
         {
           type: 'API_REQUEST',
-          endpoint: `https://joby-psi.vercel.app/job-descriptions/by-url?url=${encodeURIComponent(tabUrl)}`,
+          endpoint: `${API_BASE_URL}/job-descriptions/by-url?url=${encodeURIComponent(tabUrl)}`,
           method: 'GET',
         },
         (res) => resolve(res ?? { data: null, error: 'No response' })
@@ -876,7 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const res = await new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'PATCH', body: payload },
+        { type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'PATCH', body: payload },
         (r) => resolve(r ?? { error: 'No response' })
       );
     });
