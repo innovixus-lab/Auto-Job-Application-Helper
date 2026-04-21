@@ -2,7 +2,50 @@
 
 ## Backend Deployment to Render
 
-Your backend is deployed at: **https://auto-job-helper-backend.onrender.com**
+Your backend is deployed at: **https://joby-7b07.onrender.com**
+
+### Render Configuration (FIXED - No Docker Issues)
+
+I've created a `render.yaml` file that configures Render to use **Node.js** instead of Docker. This eliminates the Dockerfile error.
+
+**Configuration:**
+- ✅ Runtime: Node.js 20
+- ✅ Root Directory: `backend`
+- ✅ Build Command: `npm install && npm run build`
+- ✅ Start Command: `npm start`
+
+### How to Deploy/Redeploy:
+
+#### Option 1: Using render.yaml (Recommended)
+1. Commit and push the new `render.yaml` file:
+   ```bash
+   git add render.yaml backend/.renderignore
+   git commit -m "Add Render configuration"
+   git push origin main
+   ```
+
+2. In Render Dashboard:
+   - Go to your service settings
+   - Change **Runtime** from "Docker" to "Node"
+   - Set **Root Directory** to `backend`
+   - Set **Build Command** to `npm install && npm run build`
+   - Set **Start Command** to `npm start`
+   - Click "Save Changes"
+   - Render will auto-redeploy
+
+#### Option 2: Manual Configuration in Render Dashboard
+1. Go to https://dashboard.render.com
+2. Click on your service (joby-backend or similar)
+3. Click "Settings" tab
+4. Scroll to "Build & Deploy" section
+5. Change these settings:
+   - **Runtime:** Node
+   - **Root Directory:** `backend`
+   - **Build Command:** `npm install && npm run build`
+   - **Start Command:** `npm start`
+   - **Node Version:** 20.11.0 (optional, but recommended)
+6. Click "Save Changes"
+7. Go to "Manual Deploy" and click "Deploy latest commit"
 
 ### Required Environment Variables on Render
 

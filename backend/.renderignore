@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+*.test.ts
+*.property.ts
+coverage
+__tests__
+.git
