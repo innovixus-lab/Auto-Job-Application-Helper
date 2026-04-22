@@ -4,7 +4,8 @@
  */
 
 // ── API base URL — change this to your production URL before release ──────────
-const API_BASE_URL = 'https://auto-job-helper-backend.onrender.com';
+const API_BASE_URL = 'https://joby-psi.vercel.app';
+// const API_BASE_URL = 'https://joby-7b07.onrender.com'; // Render
 // const API_BASE_URL = 'http://localhost:3000'; // local dev
 
 // ── JobDetector (inlined — cannot use ES module imports in MV3 service worker) ─

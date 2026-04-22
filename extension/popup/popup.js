@@ -4,7 +4,9 @@
  */
 
 // ── API Configuration ────────────────────────────────────────────────────────
-const API_BASE_URL = 'https://auto-job-helper-backend.onrender.com';
+const API_BASE_URL = 'https://joby-psi.vercel.app';
+// const API_BASE_URL = 'https://joby-7b07.onrender.com'; // Render
+// const API_BASE_URL = 'http://localhost:3000'; // local dev
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
