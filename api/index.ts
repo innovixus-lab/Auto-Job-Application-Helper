@@ -15,7 +15,20 @@ if (missing.length > 0) {
   };
   module.exports = handler;
 } else {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const app = require('../backend/src/app').default;
-  module.exports = app;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const app = require('../backend/src/app').default;
+    module.exports = app;
+  } catch (err: any) {
+    console.error('[Vercel] Failed to load app:', err);
+    const handler = (_req: any, res: any) => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        data: null,
+        error: `Server failed to start: ${err?.message ?? 'Unknown error'}`,
+        status: 500,
+      }));
+    };
+    module.exports = handler;
+  }
 }
