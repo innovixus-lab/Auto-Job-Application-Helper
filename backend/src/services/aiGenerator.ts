@@ -121,6 +121,41 @@ RULES:
 - Additional Information section must include: Year of Graduation, Years of Experience, Work Location preference, Availability note (not part of any other interview process for this company)
 - Return ONLY the raw LaTeX code — no markdown fences, no explanation
 
+CRITICAL — BANNED BUZZWORDS (these words lower ATS scores and must NEVER appear in the resume):
+The following overused, vague, or HR-cliché terms are banned. Replace them with specific, measurable, technical language:
+- "synergy", "synergize", "synergistic"
+- "leverage", "leveraged", "leveraging"
+- "passionate", "passion", "enthusiastic", "enthusiasm"
+- "rockstar", "ninja", "guru", "wizard", "unicorn"
+- "thought leader", "thought leadership"
+- "innovative", "innovation", "innovator"
+- "disruptive", "disruption"
+- "dynamic", "results-driven", "results-oriented"
+- "self-starter", "go-getter", "team player"
+- "detail-oriented", "detail-focused"
+- "hardworking", "hard worker", "diligent"
+- "proactive", "go-to person"
+- "strategic thinker", "strategic thinking"
+- "out-of-the-box", "think outside the box"
+- "fast-paced environment", "fast-paced"
+- "strong communication skills", "excellent communication"
+- "interpersonal skills"
+- "problem-solver", "problem-solving skills" (use specific examples instead)
+- "multitasker", "multitasking"
+- "motivated", "highly motivated", "self-motivated"
+- "seasoned", "seasoned professional"
+- "proven track record"
+- "value-add", "value-added"
+- "best-in-class", "world-class", "cutting-edge", "state-of-the-art"
+- "game-changer", "game-changing"
+- "holistic", "holistic approach"
+- "ecosystem"
+- "bandwidth" (when used metaphorically)
+- "circle back", "deep dive", "move the needle", "low-hanging fruit"
+- "stakeholder management" (describe the actual stakeholders and outcomes instead)
+
+Instead of these banned words, write concrete bullet points with: specific technologies, measurable outcomes (%, $, time saved, scale), and real actions taken.
+
 LATEX TEMPLATE TO FOLLOW EXACTLY:
 
 %-------------------------
