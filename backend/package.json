@@ -4,7 +4,7 @@
   "description": "Backend API for Auto Job Application Helper",
   "main": "dist/index.js",
   "scripts": {
-    "build": "./node_modules/.bin/tsc",
+    "build": "./node_modules/.bin/tsc --project tsconfig.json",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "migrate": "ts-node src/db/migrate.ts",
