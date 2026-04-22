@@ -1,13 +1,12 @@
 {
   "version": 2,
-  "buildCommand": null,
   "functions": {
-    "api/index.js": {
+    "api/index.ts": {
       "memory": 1024,
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.js" }
+    { "source": "/(.*)", "destination": "/api/index.ts" }
   ]
 }
