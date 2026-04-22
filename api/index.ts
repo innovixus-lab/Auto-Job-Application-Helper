@@ -1,34 +1,38 @@
-// Vercel serverless entry point
-// Validates env vars and exports the Express app as the default handler
+// Vercel serverless entry point - minimal version for debugging
+import type { IncomingMessage, ServerResponse } from 'http';
 
-const REQUIRED = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
-const missing = REQUIRED.filter((k) => !process.env[k]);
-
-if (missing.length > 0) {
-  const handler = (_req: any, res: any) => {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      data: null,
-      error: `Missing environment variables: ${missing.join(', ')}. Add them in Vercel → Settings → Environment Variables.`,
-      status: 500,
-    }));
-  };
-  module.exports = handler;
-} else {
+// Step 1: Test if basic handler works
+const handler = async (req: IncomingMessage, res: ServerResponse) => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const app = require('../backend/src/app').default;
-    module.exports = app;
-  } catch (err: any) {
-    console.error('[Vercel] Failed to load app:', err);
-    const handler = (_req: any, res: any) => {
+    const REQUIRED = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
+    const missing = REQUIRED.filter((k) => !process.env[k]);
+
+    if (missing.length > 0) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         data: null,
-        error: `Server failed to start: ${err?.message ?? 'Unknown error'}`,
+        error: `Missing env vars: ${missing.join(', ')}`,
         status: 500,
       }));
-    };
-    module.exports = handler;
+      return;
+    }
+
+    // Try loading the app
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const appModule = require('../backend/src/app');
+    const app = appModule.default || appModule;
+    app(req, res);
+
+  } catch (err: any) {
+    console.error('[Vercel Handler Error]', err);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      data: null,
+      error: `Crash: ${err?.message ?? String(err)}`,
+      stack: err?.stack ?? null,
+      status: 500,
+    }));
   }
-}
+};
+
+export default handler;
