@@ -6,3 +6,4 @@ dist/
 uploads/
 extension/dist/
 extension/extension-dist.zip
+backend/.env
