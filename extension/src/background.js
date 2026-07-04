@@ -379,7 +379,11 @@ async function handleUploadResume({ fileData, filename, mimetype }, sendResponse
 async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
+<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/cover-letter`, {
+=======
+    const response = await fetch(`${BASE_URL}/generate/cover-letter`, {
+>>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -400,7 +404,11 @@ async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendRes
 async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
+<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/answers`, {
+=======
+    const response = await fetch(`${BASE_URL}/generate/answers`, {
+>>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -421,7 +429,11 @@ async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, 
 async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterText }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
+<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/applications`, {
+=======
+    const response = await fetch(`${BASE_URL}/applications`, {
+>>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -445,7 +457,11 @@ async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterTe
 async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
+<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/resume-latex`, {
+=======
+    const response = await fetch(`${BASE_URL}/generate/resume-latex`, {
+>>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -461,7 +477,11 @@ async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendRes
 }
 
 // ── Auth handlers ────────────────────────────────────────────────────────────
+<<<<<<< Updated upstream
 const BASE_URL = API_BASE_URL;
+=======
+const BASE_URL = 'https://joby-psi.vercel.app';
+>>>>>>> Stashed changes
 
 async function handleRegister({ email, password }, sendResponse) {
   try {
