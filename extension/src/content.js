@@ -111,11 +111,7 @@ async function init() {
 
     const response = await wakeAndSend({
       type: 'API_REQUEST',
-<<<<<<< Updated upstream
       endpoint: `${API_BASE_URL}/job-descriptions`,
-=======
-      endpoint: 'https://joby-psi.vercel.app/job-descriptions',
->>>>>>> Stashed changes
       method: 'POST',
       body: { ...jobDescription, body: jobDescription.body ? jobDescription.body.slice(0, 5000) : null },
     });
@@ -414,11 +410,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
   autofillBtn.addEventListener('click', async () => {
     autofillBtn.disabled = true; autofillBtn.textContent = 'Filling…'; autofillOut.textContent = '';
     try {
-<<<<<<< Updated upstream
       const res = await wakeAndSend({ type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' });
-=======
-      const res = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' });
->>>>>>> Stashed changes
       autofillBtn.disabled = false; autofillBtn.textContent = 'Autofill';
       if (res.error === '__CONTEXT_DEAD__') { showRefreshPrompt(autofillOut); return; }
       if (!res || !res.data) { autofillOut.innerHTML = `<span style="color:#f87171;font-weight:700;">${escapeHtml(res?.error ?? 'Could not load resume data.')}</span>`; return; }
@@ -438,11 +430,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     if (!jdId) { clOut.innerHTML = '<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">Not logged in or job not saved. Log in and refresh.</p>'; return; }
     genBtn.disabled = true; genBtn.textContent = 'Generating…'; clOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait…</p>';
     try {
-<<<<<<< Updated upstream
       const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' });
-=======
-      const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' });
->>>>>>> Stashed changes
       if (rRes.error === '__CONTEXT_DEAD__') { genBtn.disabled = false; genBtn.textContent = 'Cover Letter'; showRefreshPrompt(clOut); return; }
       if (!rRes.data?.id) { genBtn.disabled = false; genBtn.textContent = 'Cover Letter'; clOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? 'No resume found. Upload first.')}</p>`; return; }
       const res = await safeSend({ type: 'GENERATE_COVER_LETTER', jobDescriptionId: jdId, resumeId: rRes.data.id });
@@ -481,11 +469,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     const questions = raw.split('\n').map(q => q.trim()).filter(Boolean);
     answersBtn.disabled = true; answersBtn.textContent = 'Generating…'; answersOut.innerHTML = '<p style="color:var(--tm);margin:0;font-size:11px;">Please wait…</p>';
     try {
-<<<<<<< Updated upstream
       const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' });
-=======
-      const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' });
->>>>>>> Stashed changes
       if (rRes.error === '__CONTEXT_DEAD__') { answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers'; showRefreshPrompt(answersOut); return; }
       if (!rRes.data?.id) { answersBtn.disabled = false; answersBtn.textContent = 'Gen Answers'; answersOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? 'No resume found. Upload first.')}</p>`; return; }
       const res = await safeSend({ type: 'GENERATE_ANSWERS', jobDescriptionId: jdId, resumeId: rRes.data.id, questions });
@@ -554,11 +538,7 @@ function mountOverlay({ platform, jobDescription, formFiller, warnings = [] }) {
     resumeBtn.disabled = true; resumeBtn.textContent = '⏳ Generating…';
     resumeOut.innerHTML = '<p style="color:var(--tm);font-size:11px;margin:0;">Analysing job and building your ATS resume…</p>';
     try {
-<<<<<<< Updated upstream
       const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: `${API_BASE_URL}/resumes/me`, method: 'GET' });
-=======
-      const rRes = await wakeAndSend({ type: 'API_REQUEST', endpoint: 'https://joby-psi.vercel.app/resumes/me', method: 'GET' });
->>>>>>> Stashed changes
       if (!rRes.data?.id) {
         resumeBtn.disabled = false; resumeBtn.textContent = '📄 Generate ATS Resume (LaTeX)';
         resumeOut.innerHTML = `<p style="color:#f87171;font-weight:600;margin:0;font-size:11px;">${escapeHtml(rRes.error ?? 'No resume found. Upload first.')}</p>`; return;

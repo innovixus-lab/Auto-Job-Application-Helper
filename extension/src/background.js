@@ -289,7 +289,7 @@ async function refreshAccessToken() {
   if (!refreshToken) return null;
 
   try {
-    const response = await fetch(`${BASE_URL}/auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -345,7 +345,7 @@ async function handleUploadResume({ fileData, filename, mimetype }, sendResponse
     const doUpload = async (token) => {
       const formData = new FormData();
       formData.append('file', blob, filename);
-      return fetch(`${BASE_URL}/resumes`, {
+      return fetch(`${API_BASE_URL}/resumes`, {
         method: 'POST',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
@@ -379,11 +379,7 @@ async function handleUploadResume({ fileData, filename, mimetype }, sendResponse
 async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/cover-letter`, {
-=======
-    const response = await fetch(`${BASE_URL}/generate/cover-letter`, {
->>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -404,11 +400,7 @@ async function handleGenerateCoverLetter({ jobDescriptionId, resumeId }, sendRes
 async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/answers`, {
-=======
-    const response = await fetch(`${BASE_URL}/generate/answers`, {
->>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -429,11 +421,7 @@ async function handleGenerateAnswers({ jobDescriptionId, resumeId, questions }, 
 async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterText }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/applications`, {
-=======
-    const response = await fetch(`${BASE_URL}/applications`, {
->>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -457,11 +445,7 @@ async function handleMarkAsApplied({ jobDescriptionId, matchScore, coverLetterTe
 async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendResponse) {
   try {
     const { accessToken } = await getStoredTokens();
-<<<<<<< Updated upstream
     const response = await fetch(`${API_BASE_URL}/generate/resume-latex`, {
-=======
-    const response = await fetch(`${BASE_URL}/generate/resume-latex`, {
->>>>>>> Stashed changes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -477,15 +461,10 @@ async function handleGenerateResumeLatex({ jobDescriptionId, resumeId }, sendRes
 }
 
 // ── Auth handlers ────────────────────────────────────────────────────────────
-<<<<<<< Updated upstream
-const BASE_URL = API_BASE_URL;
-=======
-const BASE_URL = 'https://joby-psi.vercel.app';
->>>>>>> Stashed changes
 
 async function handleRegister({ email, password }, sendResponse) {
   try {
-    const response = await fetch(`${BASE_URL}/auth/register`, {
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -496,7 +475,7 @@ async function handleRegister({ email, password }, sendResponse) {
       return;
     }
     // Register doesn't return tokens — auto-login to get them
-    const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+    const loginRes = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -515,7 +494,7 @@ async function handleRegister({ email, password }, sendResponse) {
 
 async function handleLogin({ email, password }, sendResponse) {
   try {
-    const response = await fetch(`${BASE_URL}/auth/login`, {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -536,7 +515,7 @@ async function handleLogout(sendResponse) {
   try {
     const { refreshToken, accessToken } = await getStoredTokens();
     if (refreshToken) {
-      await fetch(`${BASE_URL}/auth/logout`, {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
